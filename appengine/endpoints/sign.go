@@ -223,14 +223,9 @@ func validSignHash(ctx context.Context, requestHash []byte) error {
 	if b == "" {
 		return fmt.Errorf("BUCKET environment variable not set for %v", ctx)
 	}
-	ih, err := getAllowList(ctx, b, "appengine_config/pe_allowlist.yaml")
+	acceptedHashes, err := getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
 	if err != nil {
 		return fmt.Errorf("retrieving allowlist returned error: %v", err)
-	}
-	var ok bool
-	acceptedHashes, ok := ih.(map[string]bool)
-	if !ok {
-		return fmt.Errorf("could not convert allowlist to map: %#v", ih)
 	}
 
 	log.Infof(ctx, "retrieved acceptable hashes: %#v", acceptedHashes)

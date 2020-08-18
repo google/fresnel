@@ -203,13 +203,9 @@ func populateAllowlist(ctx context.Context) (map[string]bool, error) {
 		return nil, errors.New("BUCKET environment variable not set")
 	}
 
-	ih, err := getAllowList(ctx, b, "appengine_config/pe_allowlist.yaml")
+	ah, err := getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("retrieving allowlist returned error: %v", err)
-	}
-	ah, ok := ih.(map[string]bool)
-	if !ok {
-		return nil, fmt.Errorf("could not convert allowlist to map: %#v", ih)
 	}
 	return ah, nil
 }
