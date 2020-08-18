@@ -21,16 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/google/fresnel/models"
 	"google.golang.org/appengine/aetest"
 	"google.golang.org/appengine/user"
-	"github.com/google/fresnel/models"
 )
 
 const (
@@ -156,36 +154,6 @@ func TestUnmarshalSeedRequestFailure(t *testing.T) {
 	}
 }
 
-func TestSignSeedSuccess(t *testing.T) {
-	aetest, aedone, err := aetest.NewContext()
-	if err != nil {
-		t.Fatalf("failed to create appengine test instance: %s", err)
-	}
-	defer aedone()
-
-	testGood := []struct {
-		desc string
-		s    models.Seed
-	}{
-		{
-			"valid seed",
-			models.Seed{
-				Issued:   time.Date(2019, time.January, 1, 0, 0, 0, 0, time.UTC),
-				Username: "test@googleplex.com",
-			},
-		},
-	}
-	for _, tt := range testGood {
-		ss, err := signSeedResponse(aetest, tt.s)
-		if err != nil {
-			t.Errorf("signing %s failed with: %s", tt.desc, err)
-		}
-		if ss.Signature == nil {
-			t.Errorf("%s signSeed() returned nil error but signature nil", tt.desc)
-		}
-	}
-}
-
 func TestSignSeedFailure(t *testing.T) {
 	seed := models.Seed{Username: "test@googleplex.com"}
 	// Ensuring we don't pass an appengine context to ensure signing fails.
@@ -237,113 +205,6 @@ func generateBadTestSeedRequest() ([]byte, error) {
 	}
 	sr := models.SeedRequest{Hash: h}
 	return json.Marshal(sr)
-}
-
-func TestServeHTTP(t *testing.T) {
-	handler := SeedRequestHandler{}
-
-	inst, err := aetest.NewInstance(nil)
-	if err != nil {
-		t.Fatalf("failed to create test appengine instance: %v", err)
-	}
-	defer inst.Close()
-
-	bucketFileFinder = fakeGoodBucketFile
-	signSeed = signSeedResponse
-
-	tests := []struct {
-		desc     string
-		env      map[string]string
-		req      func(*testing.T, aetest.Instance) (*httptest.ResponseRecorder, *http.Request)
-		errstr   string
-		httpcode int
-	}{
-		{
-			"valid request",
-			map[string]string{
-				"BUCKET":       "test",
-				"VERIFY_SEED_HASH": "true",
-			},
-			serveHTTPValid,
-			`"ErrorCode":0`,
-			http.StatusOK,
-		},
-		{
-			"invalid JSON",
-			map[string]string{
-				"BUCKET":       "test",
-				"VERIFY_SEED_HASH": "true",
-			},
-			serveHTTPFailUnmarshal,
-			`"ErrorCode":103`,
-			http.StatusInternalServerError,
-		},
-		{
-			"invalid user",
-			map[string]string{
-				"BUCKET":       "test",
-				"VERIFY_SEED_HASH": "true",
-			},
-			serveHTTPFailUser,
-			`"ErrorCode":107`,
-			http.StatusInternalServerError,
-		},
-		{
-			"invalid request - VERIFY_SEED_HASH onn",
-			map[string]string{
-				"BUCKET":       "test",
-				"VERIFY_SEED_HASH": "true",
-			},
-			serveHTTPFailValidate,
-			`"ErrorCode":102`,
-			http.StatusInternalServerError,
-		},
-		{
-			"invalid request - VERIFY_SEED_HASH off",
-			map[string]string{
-				"BUCKET":       "test",
-				"VERIFY_SEED_HASH": "false",
-			},
-			serveHTTPFailValidate,
-			`"ErrorCode":0`,
-			http.StatusOK,
-		},
-		{
-			"invalid sign",
-			map[string]string{
-				"BUCKET":       "test",
-				"VERIFY_SEED_HASH": "true",
-			},
-			serveHTTPFailSign,
-			`"ErrorCode":104`,
-			http.StatusInternalServerError,
-		},
-	}
-
-	for _, tt := range tests {
-
-		cleanup, err := prepEnvVariables(tt.env)
-		if err != nil {
-			t.Errorf("failed to prep test environment variables: %v", err)
-		}
-
-		w, r := tt.req(t, inst)
-		handler.ServeHTTP(w, r)
-		if w.Code != tt.httpcode {
-			t.Errorf("%s ServeHTTP() got %d but expected: %d", tt.desc, w.Code, tt.httpcode)
-		}
-		body, err := ioutil.ReadAll(w.Result().Body)
-		if err != nil {
-			t.Fatalf("failed to read response from ServeHTTP for %s err: %s", tt.desc, err)
-		}
-		if !strings.Contains(string(body), tt.errstr) {
-			t.Errorf("%s got:\n%s\nwhich did not contain\n%s", tt.desc, w.Body, tt.errstr)
-		}
-		if err := cleanup(); err != nil {
-			t.Errorf("failed to cleanup env variables: %v", err)
-		}
-	}
-	bucketFileFinder = bucketFileHandle
 }
 
 func serveHTTPFailUnmarshal(t *testing.T, inst aetest.Instance) (*httptest.ResponseRecorder, *http.Request) {
