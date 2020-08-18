@@ -33,7 +33,7 @@ import (
 	"github.com/google/fresnel/models"
 	"google.golang.org/appengine/aetest"
 	"google.golang.org/appengine"
-	"github.com/google/go-cmp"
+	"github.com/google/go-cmp/cmp"
 )
 
 const bucket = "test"

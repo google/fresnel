@@ -37,7 +37,7 @@ import (
 	"github.com/google/fresnel/models"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
-	"github.com/googleapis/google-cloud-go/tree/master/storage"
+	"cloud.google.com/go/storage"
 	"gopkg.in/yaml.v2"
 )
 

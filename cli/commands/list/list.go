@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	flag
+	"flag"
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/logger"
 	"github.com/google/subcommands"

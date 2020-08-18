@@ -28,7 +28,7 @@ import (
 
 	// TODO: Implement and import wipe subcommand.
 
-	flag
+	"flag"
 	"github.com/google/logger"
 	"github.com/google/subcommands"
 )

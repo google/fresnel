@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	flag
+	"flag"
 	"github.com/google/fresnel/cli/config"
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/fresnel/cli/installer"

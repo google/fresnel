@@ -32,7 +32,7 @@ import (
 	"github.com/google/fresnel/cli/config"
 	"github.com/google/winops/storage"
 	"github.com/google/fresnel/models"
-	"github.com/google/go-cmp"
+	"github.com/google/go-cmp/cmp"
 )
 
 // fakeConfig inherits all members of config.Configuration through embedding.
