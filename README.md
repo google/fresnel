@@ -3,7 +3,7 @@
 Fresnel is an infrastructure service which allows operating system images to be
 retrieved and provisioned from anywhere where internet access is available. It
 allows an authorized user to create sanctioned boot media that can be used to
-provision the system, and it allows the system to obtain files needed to build
+provision a machine, and it allows the installer to obtain files needed to build
 trust.
 
 ## Overview
@@ -29,15 +29,20 @@ such media.
 Fresnel addresses these limitations by providing an intermediary broker for the
 bootstrap and provisioning process. The Fresnel infrastructure provides a place
 where an authorized user can obtain and generate up-to-date sanctioned boot
-media. It also provides a place where the provisioning process can obtain the
-files needed to build trust prior to connecting to the business network. Once
-the provisioning process gains trust, trusted connectivity can be provided by a
+media. It also provides a place where the installer can obtain the files needed
+to build trust prior to connecting to the business network. Once the
+provisioning process gains trust, trusted connectivity can be provided by a
 VPN or another solution to provides access to the remaining files needed to
 complete the provisioning process.
 
 ## Documentation
 
-See the [Project Documentation](doc/index.md) for more information.
+See the [App Engine documentation](appengine/README.md) for information on
+installing and configuring Fresnel App Engine and for information on how to
+make requests for signed-urls from App Engine.
+
+See the [CLI Documentation](cli/README.md) for information on using the Fresnel
+CLI to provision your installer.
 
 ## Disclaimer
 
