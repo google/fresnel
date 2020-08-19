@@ -27,7 +27,8 @@ package config
 		seedDest:    "seed",
 		imageServer: "https://image.host.com/folder",
 		images: map[string]string{
-      "default": "installer_img.iso",
+		  "default": "installer_img.iso",
+      "stable": "installer_img.iso",
 		},
 	},
 	"linux": distribution{
@@ -36,6 +37,7 @@ package config
 	  imageServer: "",
 		images: map[string]string{
 		  "default": "installer.img.gz",
+		  "stable": "installer.img.gz",
 	  },
 	 },
  }

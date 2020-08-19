@@ -146,11 +146,11 @@ func TestNew(t *testing.T) {
 		if c == tt.out {
 			continue
 		}
-		if err := cmpConfig(*c, *tt.out); err != nil {
-			t.Errorf("%s: %v", tt.desc, err)
-		}
 		if !errors.Is(got, tt.want) {
 			t.Errorf("%s: New() got: '%v', want: '%v'", tt.desc, got, tt.want)
+		}
+		if err := cmpConfig(*c, *tt.out); err != nil {
+			t.Errorf("%s: %v", tt.desc, err)
 		}
 	}
 }
