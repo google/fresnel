@@ -44,6 +44,12 @@ make requests for signed-urls from App Engine.
 See the [CLI Documentation](cli/README.md) for information on using the Fresnel
 CLI to provision your installer.
 
+## Contact
+
+We have a public discussion list at
+[fresnel-discuss@googlegroups.com](https://groups.google.com/forum/#!forum/fresnel-discuss)
+
+
 ## Disclaimer
 
 This is not an official Google product.
