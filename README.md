@@ -4,6 +4,7 @@
 |----------------|------------|------|---------|-------------|
 [![Google Groups - Fresnel](https://img.shields.io/badge/Support-Google%20Groups-blue)](https://groups.google.com/forum/#!forum/fresnel-discuss) | [![Travis CI Build Status](https://img.shields.io/travis/google/fresnel)](https://travis-ci.org/google/fresnel) | [![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](https://github.com/google/fresnel/blob/master/CONTRIBUTING.md) | [![Open Issues](https://img.shields.io/github/issues/google/fresnel)](https://github.com/google/fresnel/issues) | [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](https://github.com/google/fresnel/blob/master/LICENSE)
 
+[Fresnel](https://en.wikipedia.org/wiki/Fresnel_lens) */fray-NEL/* projects Windows out into the world.
 
 Fresnel is an infrastructure service which allows operating system images to be
 retrieved and provisioned from anywhere where internet access is available. It
