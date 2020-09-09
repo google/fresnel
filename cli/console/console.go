@@ -83,7 +83,6 @@ type TargetDevice interface {
 
 // PrintDevices takes a slice of target devices and prints relevant information
 // as a human-readable table to the console.
-// TODO  Output installer information once it can be detected.
 func PrintDevices(targets []TargetDevice, w io.Writer) {
 	table := tablewriter.NewWriter(w)
 	table.SetBorder(false)

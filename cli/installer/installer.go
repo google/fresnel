@@ -154,8 +154,6 @@ type Installer struct {
 
 // New generates a new Installer from a configuration, with all the
 // information needed to provision the installer on an available device.
-// TODO  Only require user authentication if it is needed.
-// Otherwise, use a client with just a machine cert.
 func New(config Configuration) (*Installer, error) {
 	if config == nil {
 		return nil, fmt.Errorf("empty config: %w", errConfig)
@@ -204,10 +202,6 @@ func username() (string, error) {
 // Retrieve locates and obtains the installer image, placing it in the
 // temporary directory. Where additional metadata should be obtained
 // or checked (such as a signature or a seed) prior to returning.
-//
-// TODO - Permit overriding the download with a file path.
-// TODO - Include options to suport signature verification
-// and file decompression for compressed images.
 func (i *Installer) Retrieve() (err error) {
 	// Confirm that the Installer has what we need.
 	if i.config.Image() == "" {

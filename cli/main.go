@@ -26,8 +26,6 @@ import (
 	_ "github.com/google/fresnel/cli/commands/list"
 	_ "github.com/google/fresnel/cli/commands/write"
 
-	// TODO: Implement and import wipe subcommand.
-
 	"flag"
 	"github.com/google/logger"
 	"github.com/google/subcommands"
