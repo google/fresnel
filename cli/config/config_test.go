@@ -102,14 +102,14 @@ func TestNew(t *testing.T) {
 		{
 			desc:    "bad track",
 			devices: []string{"disk1"},
-			os:      "linux",
+			os:      "windows",
 			track:   "foo",
 			want:    errTrack,
 		},
 		{
 			desc:       "bad seed server",
 			devices:    []string{"disk1"},
-			os:         "linux",
+			os:         "windows",
 			track:      "stable",
 			seedServer: "test.foo@bar.com",
 			want:       errSeed,
@@ -117,7 +117,7 @@ func TestNew(t *testing.T) {
 		{
 			desc:           "isElevated error",
 			devices:        []string{"disk1"},
-			os:             "linux",
+			os:             "windows",
 			track:          "stable",
 			fakeIsElevated: func() (bool, error) { return false, errors.New("error") },
 			want:           errElevation,
@@ -125,7 +125,7 @@ func TestNew(t *testing.T) {
 		{
 			desc:           "valid config",
 			devices:        []string{"disk1"},
-			os:             "linux",
+			os:             "windows",
 			track:          "stable",
 			fakeIsElevated: func() (bool, error) { return true, nil },
 			out: &Configuration{
