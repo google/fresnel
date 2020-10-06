@@ -47,12 +47,13 @@ const oneGB = uint64(1073741824)
 
 var (
 	// Dependency injections for testing.
-	currentUser  = user.Current
-	connect      = fetcherConnect
-	downloadFile = download
-	mount        = mountISO
-	selectPart   = selectPartition
-	writeISOFunc = writeISO
+	currentUser     = user.Current
+	connect         = fetcherConnect
+	connectWithCert = tlsConnect
+	downloadFile    = download
+	mount           = mountISO
+	selectPart      = selectPartition
+	writeISOFunc    = writeISO
 
 	// Wrapped errors for testing.
 	errAssert      = errors.New(`assertion error`)
@@ -158,9 +159,13 @@ func New(config Configuration) (*Installer, error) {
 	if config == nil {
 		return nil, fmt.Errorf("empty config: %w", errConfig)
 	}
+
 	// Connect serves only to give an early warning if the SSO token is expired.
-	if _, err := connect(config.Image(), ""); err != nil {
-		return nil, fmt.Errorf("fetcher.Connect(%q) returned %v: %w", config.Image(), err, errConnect)
+	// It is only called if the config specifies that a seed is required.
+	if config.SeedServer() != "" {
+		if _, err := connect(config.Image(), ""); err != nil {
+			return nil, fmt.Errorf("fetcher.Connect(%q) returned %v: %w", config.Image(), err, errConnect)
+		}
 	}
 
 	// Create a folder for temporary files. We do not need to worry about
@@ -180,6 +185,11 @@ func New(config Configuration) (*Installer, error) {
 // fetcherConnect wraps fetcher.Connect and returns an httpDoer.
 func fetcherConnect(path, user string) (httpDoer, error) {
 	return fetcher.Connect(path, user)
+}
+
+// tlsConnect wraps fetcher.TLSClient and returns an httpDoer.
+func tlsConnect() (httpDoer, error) {
+	return fetcher.TLSClient(nil, nil)
 }
 
 // username obtains the username of the user requesting the installer. If the
@@ -231,9 +241,9 @@ func (i *Installer) Retrieve() (err error) {
 	}()
 
 	// Connect to the download server and retrieve the file.
-	client, err := connect(i.config.Image(), "")
+	client, err := connectWithCert()
 	if err != nil {
-		return fmt.Errorf("fetcher.Connect(%q) returned %v: %w", i.config.Image(), err, errConnect)
+		return fmt.Errorf("fetcher.TLSClient() returned %v: %w", err, errConnect)
 	}
 	return downloadFile(client, i.config.Image(), f)
 }
