@@ -15,6 +15,8 @@
 // Package console provides simple utilities to print human-readable messages
 // to the console. For specific message types, additional verbosity is
 // available through Verbose.
+
+//this is a test.
 package console
 
 import (

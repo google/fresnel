@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//this is a test.
+
 // Package write implements the write subcommand for provisioning an installer.
 package write
 

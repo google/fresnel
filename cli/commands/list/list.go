@@ -14,6 +14,8 @@
 
 // Package list defines the list subcommand to display the devices available
 // that qualify for provisioning with an installer.
+
+//this is a test.
 package list
 
 import (
