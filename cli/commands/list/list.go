@@ -55,6 +55,10 @@ type listCmd struct {
 	// maxSize is the largest size device to search for in GB. For convenience,
 	// this value is set to 'no limit (0)' by default by flag.
 	maxSize int
+
+	// json silences any unnecessary text output and returns the device list in JSON.
+	// This value is defaulted to false by flag.
+	json bool
 }
 
 var oneGB = 1073741824
@@ -108,11 +112,17 @@ func (c *listCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&c.listFixed, "show_fixed", false, "Also display fixed drives.")
 	f.IntVar(&c.minSize, "minimum", 2, "The minimum size [in GB] of drives to search for.")
 	f.IntVar(&c.maxSize, "maximum", 0, "The maximum size [in GB] drives to search for.")
+	f.BoolVar(&c.json, "json", false, "Display the device list in JSON with no additional output")
 }
 
 // Execute runs the command and returns an ExitStatus.
 func (c *listCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	// Scan for the available drives. Warn that this may take a while.
+	if c.json {
+		// Turning on verbose will silence console output
+		console.Verbose = true
+	}
+
 	console.Print("Searching for devices. This take up to one minute...\n")
 	logger.V(1).Info("Searching for devices.")
 	devices, err := search("", uint64(c.minSize*oneGB), uint64(c.maxSize*oneGB), !c.listFixed)
@@ -126,9 +136,7 @@ func (c *listCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{}) 
 		available = append(available, d)
 	}
 
-	// Print available devices
-	console.Printf("Available devices for Installer provisioning:\n")
-	console.PrintDevices(available, os.Stdout)
+	console.PrintDevices(available, os.Stdout, c.json)
 
 	// Provide contextual help for next steps.
 	console.Printf(`
