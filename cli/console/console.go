@@ -19,6 +19,7 @@ package console
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -81,9 +82,30 @@ type TargetDevice interface {
 	Size() uint64
 }
 
+type rawDevice struct {
+	ID   string
+	Name string
+	Size string
+}
+
 // PrintDevices takes a slice of target devices and prints relevant information
-// as a human-readable table to the console.
-func PrintDevices(targets []TargetDevice, w io.Writer) {
+// as a human-readable table to the console. If the json flag
+// is present the target devices will be printed as JSON rather than a table.
+func PrintDevices(targets []TargetDevice, w io.Writer, json bool) {
+
+	if json {
+		Printjson(targets, w)
+		// Return immediately after raw output to ensure the output is proper JSON only.
+		return
+	}
+
+	//Check if any devices exist.
+	if len(targets) == 0 {
+		fmt.Fprintf(w, "No matching devices were found.")
+		return
+	}
+
+	// Display the table to the user otherwise, output devices with table
 	table := tablewriter.NewWriter(w)
 	table.SetBorder(false)
 	table.SetAutoWrapText(false)
@@ -102,6 +124,28 @@ func PrintDevices(targets []TargetDevice, w io.Writer) {
 		)
 	}
 	table.Render()
+}
+
+// Printjson takes a slice of target devices and prints relevant information
+// as JSON to the console when the json flag is present on the PrintDevices
+// function.
+func Printjson(targets []TargetDevice, w io.Writer) error {
+
+	result := []rawDevice{}
+	for _, device := range targets {
+		result = append(result, rawDevice{
+			ID:   device.Identifier(),
+			Name: device.FriendlyName(),
+			Size: humanize.Bytes(device.Size()),
+		})
+	}
+
+	output, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "%s", output)
+	return nil
 }
 
 type progressReader struct {

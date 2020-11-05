@@ -61,31 +61,51 @@ func TestPrintDevices(t *testing.T) {
 	tests := []struct {
 		desc    string
 		devices []TargetDevice
+		json    bool
+		want    string
 	}{
 		{
 			desc:    "no devices",
 			devices: []TargetDevice{},
+			json:    false,
+			want:    "No matching devices were found.",
+		},
+		{
+			desc:    "no devices with json",
+			devices: []TargetDevice{},
+			json:    true,
+			want:    "[]",
 		},
 		{
 			desc:    "one device",
 			devices: []TargetDevice{deviceOne},
+			json:    false,
+			want:    deviceOne.Identifier(),
+		},
+		{
+			desc:    "one device with json",
+			devices: []TargetDevice{deviceOne},
+			json:    true,
+			want:    "[{\"ID\":\"" + deviceOne.Identifier(),
 		},
 		{
 			desc:    "two devices",
 			devices: []TargetDevice{deviceOne, deviceTwo},
+			json:    false,
+			want:    deviceTwo.Identifier(),
 		},
 		{
 			desc:    "three devices",
 			devices: []TargetDevice{deviceOne, deviceTwo, deviceThree},
+			json:    false,
+			want:    deviceThree.Identifier(),
 		},
 	}
 	for _, tt := range tests {
 		var got bytes.Buffer
-		PrintDevices(tt.devices, &got)
-		for _, device := range tt.devices {
-			if !strings.Contains(got.String(), device.Identifier()) {
-				t.Errorf("%s: PrintDevices() got = %q, must contain = %q", tt.desc, got.String(), device.Identifier())
-			}
+		PrintDevices(tt.devices, &got, tt.json)
+		if !strings.Contains(got.String(), tt.want) {
+			t.Errorf("%s: PrintDevices() got = %q, must contain = %q", tt.desc, got.String(), tt.want)
 		}
 	}
 }

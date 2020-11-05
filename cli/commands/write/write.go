@@ -374,7 +374,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		devices = append(devices, device)
 	}
 	// Display information about the device(s) and warn the user.
-	console.PrintDevices(devices, os.Stdout)
+	console.PrintDevices(devices, os.Stdout, false)
 	if conf.Warning() {
 		if err := console.PromptUser(); err != nil {
 			return fmt.Errorf("console.PromptUser() returned %v", err)
