@@ -224,7 +224,7 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&c.allDrives, "a", false, "write the installer to all suitable flash drives (shorthand)")
 	f.BoolVar(&c.cleanup, "cleanup", true, "cleanup temporary files after provisioning is complete")
 	f.BoolVar(&c.eject, "eject", c.eject, "eject/power-off devices after provisioning is complete")
-	f.BoolVar(&c.warning, "confirm", true, "display a confirmation prompt before non-installer storage devices are overwritten")
+	f.BoolVar(&c.warning, "warning", true, "display a confirmation prompt before non-installer storage devices are overwritten")
 	f.BoolVar(&c.update, "update", c.update, "attempts to perform a device refresh only for non-admin users")
 	f.StringVar(&c.distro, "distro", c.distro, "the os distribution to be provisioned, typically 'windows' or 'linux'")
 	f.StringVar(&c.track, "track", c.track, "track (variant) of the installer to provision")

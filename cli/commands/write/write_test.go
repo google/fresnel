@@ -280,7 +280,7 @@ func TestRun(t *testing.T) {
 				return []installer.Device{&fakeDevice{id: "1"}}, nil
 			},
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) { return nil, errors.New("") },
-			args:       []string{"--confirm=false", "1"},
+			args:       []string{"--warning=false", "1"},
 			want:       errInstaller,
 		},
 		{
@@ -293,7 +293,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{retErr: errors.New("error")}, nil
 			},
-			args: []string{"--confirm=false", "1"},
+			args: []string{"--warning=false", "1"},
 			want: errRetrieve,
 		},
 		{
@@ -306,7 +306,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{prepErr: errors.New("error")}, nil
 			},
-			args: []string{"--confirm=false", "1"},
+			args: []string{"--warning=false", "1"},
 			want: errPrepare,
 		},
 		{
@@ -319,7 +319,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{provErr: errors.New("error")}, nil
 			},
-			args: []string{"--confirm=false", "1"},
+			args: []string{"--warning=false", "1"},
 			want: errProvision,
 		},
 		{
@@ -332,7 +332,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{finErr: errors.New("error")}, nil
 			},
-			args: []string{"--confirm=false", "1"},
+			args: []string{"--warning=false", "1"},
 			want: errFinalize,
 		},
 		{
@@ -345,7 +345,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{finErr: errors.New("error")}, nil
 			},
-			args: []string{"--confirm=false", "1"},
+			args: []string{"--warning=false", "1"},
 			want: errFinalize,
 		},
 		{
@@ -358,7 +358,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{}, nil
 			},
-			args: []string{"--confirm=false", "1"},
+			args: []string{"--warning=false", "1"},
 			want: nil,
 		},
 		{
@@ -371,7 +371,7 @@ func TestRun(t *testing.T) {
 			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
 				return &fakeInstaller{}, nil
 			},
-			args: []string{"--confirm=false", "--all"},
+			args: []string{"--warning=false", "--all"},
 			want: nil,
 		},
 	}
