@@ -7,7 +7,7 @@
 [Fresnel](https://en.wikipedia.org/wiki/Fresnel_lens) */fray-NEL/* projects Windows out into the world.
 
 Fresnel is an infrastructure service which allows operating system images to be
-retrieved and provisioned from anywhere where internet access is available. It
+retrieved and provisioned from anywhere internet access is available. It
 allows an authorized user to create sanctioned boot media that can be used to
 provision a machine, and it allows the installer to obtain files needed to build
 trust.
