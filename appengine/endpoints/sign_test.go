@@ -16,7 +16,6 @@ package endpoints
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,8 +29,6 @@ import (
 	"time"
 
 	"github.com/google/fresnel/models"
-	"google.golang.org/appengine/aetest"
-	"google.golang.org/appengine"
 )
 
 const bucket = "test"
@@ -50,10 +47,6 @@ var (
 	// Invalid JSON that cannot be unmarshalled correctly.
 	badJSON = []byte(`{"name":bogus?}`)
 )
-
-func fakeGoodBucketFile(ctx context.Context, b, f string) (io.Reader, error) {
-	return bytes.NewReader([]byte("- 314aaa98adcbd86339fb4eece6050b8ae2d38ff8ebb416e231bb7724c99b830d")), nil
-}
 
 // prepEnvVariables takes a map of variables and their values and sets the environment appropriately; it returns a cleanup function that unsets any values set during the call.
 func prepEnvVariables(envVars map[string]string) (func() error, error) {
@@ -92,29 +85,6 @@ func prepSignTestRequest() (models.SignRequest, error) {
 		Path: "dummy/folder/file.txt",
 		Hash: h,
 	}, nil
-}
-
-func aeInstance() (aetest.Instance, error) {
-	return aetest.NewInstance(nil)
-}
-
-func signTestSeed(inst aetest.Instance, seed models.Seed) (models.SeedResponse, error) {
-	r, err := inst.NewRequest("POST", "/seed", bytes.NewReader([]byte("")))
-	if err != nil {
-		return models.SeedResponse{}, fmt.Errorf("failed to generate test request: %v", err)
-	}
-	return signSeedResponse(appengine.NewContext(r), seed)
-}
-
-// newRequest takes an active test appengine instance, and returns a request associated
-// with the test instance, with the parameters specified. An existing ae test instance
-// is used to conserve resources during testing.
-func newRequest(inst aetest.Instance, method, url string, body io.Reader) (*http.Request, error) {
-	r, err := inst.NewRequest(method, url, body)
-	if err != nil {
-		return nil, fmt.Errorf("NewRequest(%s, %s) returned %v", method, url, err)
-	}
-	return r, nil
 }
 
 // errReader is an io.Reader that always returns an error when you
