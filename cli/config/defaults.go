@@ -16,28 +16,27 @@ package config
 
 // distributions configures the options for different operating system
 // installers.
-
- var distributions = map[string]distribution{
- "windows": distribution{
-	  os:          windows,
-	  label:       "INSTALLER",
-	  name:        "windows",
+var distributions = map[string]distribution{
+	"windows": distribution{
+		os:          windows,
+		label:       "INSTALLER",
+		name:        "windows",
 		seedServer:  "https://appengine.address.com/seed",
 		seedFile:    "sources/boot.wim",
 		seedDest:    "seed",
 		imageServer: "https://image.host.com/folder",
 		images: map[string]string{
-		  "default": "installer_img.iso",
-      "stable": "installer_img.iso",
+			"default": "installer_img.iso",
+			"stable":  "installer_img.iso",
 		},
 	},
 	"linux": distribution{
-	  os:          linux,
-	  name:        "linux",
-	  imageServer: "",
+		os:          linux,
+		name:        "linux",
+		imageServer: "",
 		images: map[string]string{
-		  "default": "installer.img.gz",
-		  "stable": "installer.img.gz",
-	  },
-	 },
- }
+			"default": "installer.img.gz",
+			"stable":  "installer.img.gz",
+		},
+	},
+}

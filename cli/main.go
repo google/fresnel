@@ -32,7 +32,6 @@ import (
 )
 
 func main() {
-
 	// Explicitly set the log output flag from the log package so that we can see
 	// info messages by default in the console and in the logs. Logging is
 	// initialized in each sub-command.
