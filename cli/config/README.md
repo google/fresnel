@@ -1,5 +1,7 @@
 # CLI Configuration
 
+<!--* freshness: { owner: '@alexherrero' reviewed: '2020-08-17' } *-->
+
 The Fresnel CLI obtains all information for the distributions it makes available
 from [deafults.go](defaults.go).
 

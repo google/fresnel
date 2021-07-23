@@ -1,5 +1,7 @@
 # Fresnel CLI
 
+<!--* freshness: { owner: '@alexherrero' reviewed: '2020-08-17' } *-->
+
 The Fresnel CLI runs on a trusted machine that is authorized to build boot media
 for an operating system installer. It's primary purpose is to prepare storage
 media (USB or Removable Disk) that will install an operating system.
