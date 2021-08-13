@@ -123,7 +123,7 @@ func (c *listCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{}) 
 		console.Verbose = true
 	}
 
-	console.Print("Searching for devices. This take up to one minute...\n")
+	console.Print("Searching for devices. This may take up to one minute...\n")
 	logger.V(1).Info("Searching for devices.")
 	devices, err := search("", uint64(c.minSize*oneGB), uint64(c.maxSize*oneGB), !c.listFixed)
 	if err != nil {
