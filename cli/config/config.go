@@ -92,12 +92,12 @@ func New(cleanup, warning, dismount, eject, update bool, devices []string, os, t
 	}
 	if len(devices) > 0 {
 		if err := conf.addDeviceList(devices); err != nil {
-			return nil, fmt.Errorf("addDeviceList(%q) returned %w", devices, err)
+			return nil, fmt.Errorf("addDeviceList(%q) returned %v", devices, err)
 		}
 	}
 	// Sanity check the chosen distribution and add it to the config.
 	if err := conf.addDistro(os); err != nil {
-		return nil, fmt.Errorf("addDistro(%q) returned %w", os, err)
+		return nil, fmt.Errorf("addDistro(%q) returned %v", os, err)
 	}
 	// Sanity check the image track and add it to the config.
 	if err := conf.addTrack(track); err != nil {
@@ -110,7 +110,7 @@ func New(cleanup, warning, dismount, eject, update bool, devices []string, os, t
 	// Determine if the user is running with elevated permissions.
 	elevated, err := isElevated()
 	if err != nil {
-		return nil, fmt.Errorf("isElevated() returned %v: %w", err, errElevation)
+		return nil, fmt.Errorf("%w: isElevated() returned %v", errElevation, err)
 	}
 	conf.elevated = elevated
 
@@ -124,17 +124,17 @@ func (c *Configuration) addDistro(choice string) error {
 		for o := range distributions {
 			opts = append(opts, o)
 		}
-		return fmt.Errorf("image %q is not in %v: %w", choice, opts, errDistro)
+		return fmt.Errorf("%w: image %q is not in %v", errDistro, choice, opts)
 	}
 	// If a seed server is configured, it must be accompanied by a seedFile.
 	if distro.seedServer != "" && distro.seedFile == "" {
-		return fmt.Errorf("seedServer(%q) specified without a seedFile(%q): %w", distro.seedServer, distro.seedFile, errInput)
+		return fmt.Errorf("%w: seedServer(%q) specified without a seedFile(%q)", errInput, distro.seedServer, distro.seedFile)
 	}
 	// If a seedFile is configured, a destination for the seed must be specified.
 	// A seed is always stored as 'seed.json' in the location specified by
 	// seedDest.
 	if distro.seedFile != "" && distro.seedDest == "" {
-		return fmt.Errorf("seedFile(%q) specified without a destination(%q): %w", distro.seedFile, distro.seedDest, errSeed)
+		return fmt.Errorf("%w: seedFile(%q) specified without a destination(%q)", errSeed, distro.seedFile, distro.seedDest)
 	}
 
 	// The chosen distro is known, set it and return successfully.
@@ -146,13 +146,13 @@ func (c *Configuration) addDistro(choice string) error {
 // configuration or returns an error.
 func (c *Configuration) addDeviceList(devices []string) error {
 	if len(devices) < 1 {
-		return fmt.Errorf("no devices were specified: %w", errInput)
+		return fmt.Errorf("%w: no devices were specified", errInput)
 	}
 	// Check that the device IDs appear valid. Throw an error if a partition
 	// or drive letter was specified.
 	for _, d := range devices {
 		if !regExDeviceID.Match([]byte(d)) {
-			return fmt.Errorf("device(%q) must be a device ID (sda[#]), number(1-9) or disk identifier(disk[#]): %w", d, errDevice)
+			return fmt.Errorf("%w: device(%q) must be a device ID (sda[#]), number(1-9) or disk identifier(disk[#])", errDevice, d)
 		}
 	}
 	// Set devices in config.
@@ -167,7 +167,7 @@ func (c *Configuration) addSeedServer(fqdn string) error {
 	}
 	// Check that the fqdn is correctly formatted.
 	if !regExFQDN.Match([]byte(fqdn)) {
-		return fmt.Errorf("%q is not a valid FQDN: %w", fqdn, errSeed)
+		return fmt.Errorf("%w: %q is not a valid FQDN", errSeed, fqdn)
 	}
 	if !strings.HasPrefix(fqdn, "http") {
 		fqdn = `https://` + fqdn
@@ -182,7 +182,7 @@ func (c *Configuration) addSeedServer(fqdn string) error {
 func (c *Configuration) addTrack(track string) error {
 	// Check that a default image is avaialble in the distro.
 	if _, ok := c.distro.images["default"]; !ok {
-		return fmt.Errorf("a default image is not available: %w", errInput)
+		return fmt.Errorf("%w: a default image is not available", errInput)
 	}
 	// If no track was provided, the existing default is used.
 	if track == "" {
@@ -196,7 +196,7 @@ func (c *Configuration) addTrack(track string) error {
 		for o := range c.distro.images {
 			opts = append(opts, o)
 		}
-		return fmt.Errorf("invalid image track requested: %q is not in %v: %w", track, opts, errTrack)
+		return fmt.Errorf("%w: invalid image track requested: %q is not in %v", errTrack, track, opts)
 	}
 	// Set the chosen, sanity checked image.
 	c.track = track

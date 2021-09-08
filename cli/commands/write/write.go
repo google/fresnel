@@ -318,12 +318,12 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	// Generate a writer configuration.
 	conf, err := config.New(c.cleanup, c.warning, c.dismount, c.eject, c.update, f.Args(), c.distro, c.track, c.seedServer)
 	if err != nil {
-		return fmt.Errorf("config.New(cleanup: %t, warning: %t, dismount: %t, eject: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v: %w",
-			c.cleanup, c.warning, c.dismount, c.eject, f.Args(), c.distro, c.track, c.seedServer, err, errConfig)
+		return fmt.Errorf("%w: config.New(cleanup: %t, warning: %t, dismount: %t, eject: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v",
+			errConfig, c.cleanup, c.warning, c.dismount, c.eject, f.Args(), c.distro, c.track, c.seedServer, err)
 	}
 	// Write requires elevated permissions, Update does not.
 	if !c.update && !conf.Elevated() {
-		return fmt.Errorf("elevated permissions are required to use the %q command, try again using 'sudo' (Linux/Mac) or 'run as administrator' (Windows): %w", c.name, errElevation)
+		return fmt.Errorf("%w: elevated permissions are required to use the %q command, try again using 'sudo' (Linux/Mac) or 'run as administrator' (Windows)", errElevation, c.name)
 	}
 
 	// Pull a list of suitable devices.
@@ -331,7 +331,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	logger.V(1).Infof("Searching for available devices... ")
 	available, err := search("", uint64(c.minSize*oneGB), uint64(c.maxSize*oneGB), !c.listFixed)
 	if err != nil {
-		return fmt.Errorf("search returned %v: %w", err, errSearch)
+		return fmt.Errorf("%w: %v", errSearch, err)
 	}
 
 	// If the --all flag was specified, update the target list.
@@ -354,7 +354,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	for _, t := range conf.Devices() {
 		d, ok := verified[t]
 		if !ok {
-			return fmt.Errorf("requested device %q is not suitable for provisioning, available devices %v: %w", t, verified, errDevice)
+			return fmt.Errorf("%w: requested device %q is not suitable for provisioning, available devices %v", errDevice, t, verified)
 		}
 		targets = append(targets, d)
 	}
@@ -384,7 +384,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	// Initialize the installer.
 	i, err := newInstaller(conf)
 	if err != nil {
-		return fmt.Errorf("installer.New() returned %v: %w", err, errInstaller)
+		return fmt.Errorf("%w: installer.New() returned %v", errInstaller, err)
 	}
 
 	// Defer dismounts, power-off, and cleanup. Finalize only performs these
@@ -393,9 +393,9 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	defer func(devices []installer.Device) {
 		if err2 := i.Finalize(devices); err2 != nil {
 			if err == nil {
-				err = fmt.Errorf("Finalize() returned %v: %w", err2, errFinalize)
+				err = fmt.Errorf("%w: Finalize() returned %v", errFinalize, err2)
 			} else {
-				err = fmt.Errorf("%v\nFinalize() returned %v: %w", err, err2, errFinalize)
+				err = fmt.Errorf("%w: %v\nFinalize() returned %v", errFinalize, err, err2)
 			}
 		}
 	}(targets)
@@ -404,7 +404,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	console.Printf("\nRetrieving image...\n    %s ->\n    %s", conf.Image(), i.Cache())
 	logger.V(1).Infof("Retrieving image...\n    %s ->\n    %s\n\n", conf.Image(), i.Cache())
 	if err := i.Retrieve(); err != nil {
-		return fmt.Errorf("Retrieve() returned %v: %w", err, errRetrieve)
+		return fmt.Errorf("%w: Retrieve() returned %v", errRetrieve, err)
 	}
 	// Prepare and provision devices. This step occurs once per device.
 	for _, device := range targets {
@@ -412,13 +412,13 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		logger.V(1).Infof("Preparing device %q...", device.Identifier())
 		// Prepare the device.
 		if err := i.Prepare(device); err != nil {
-			return fmt.Errorf("Prepare(%q) returned %v: %w", device.FriendlyName(), err, errPrepare)
+			return fmt.Errorf("%w: Prepare(%q) returned %v: ", errPrepare, device.FriendlyName(), err)
 		}
 		console.Printf("Provisioning device %q...", device.Identifier())
 		logger.V(1).Infof("Provisioning device %q...", device.Identifier())
 		// Provision the device.
 		if err := i.Provision(device); err != nil {
-			return fmt.Errorf("Provision(%q) returned %v: %w", device.FriendlyName(), err, errProvision)
+			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
 		}
 	}
 	return nil

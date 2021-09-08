@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
 // +build windows
 
 package config
@@ -40,7 +41,7 @@ func isAdmin() (bool, error) {
 	psBlock := `(([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match 'S-1-5-32-544')`
 	out, err := powershellCmd(psBlock)
 	if err != nil {
-		return false, fmt.Errorf("%v: %w", err, errElevation)
+		return false, fmt.Errorf("%w: %v", errElevation, err)
 	}
 	if regExAdmin.Match(out) {
 		return true, nil
