@@ -157,12 +157,11 @@ func TestUnmarshalSeedRequestFailure(t *testing.T) {
 func TestSignSeedFailure(t *testing.T) {
 	seed := models.Seed{Username: "test@googleplex.com"}
 	// Ensuring we don't pass an appengine context to ensure signing fails.
-	ctx := context.Background()
-	ss, err := signSeedResponse(ctx, seed)
+	ss, err := signSeedResponse(context.Background(), seed)
 	if err == nil {
 		t.Fatalf("signSeedResponse(%v) returned nil, want error.\n%v", seed, ss)
 	}
-	if !strings.Contains(err.Error(), "sign") {
+	if !strings.Contains(err.Error(), "appengine.PublicCertificates") {
 		t.Errorf(`"signSeedResponse(%v) got err: %v expected error to contain "sign"`, seed, err)
 	}
 }

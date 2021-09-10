@@ -63,7 +63,7 @@ func (SignRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse, err := json.Marshal(resp)
 	if err != nil {
-		es := fmt.Sprintf("json.Marshall(%#v) returned: %v", resp, err)
+		es := fmt.Sprintf("json.Marshall(%#v): %v", resp, err)
 		log.Errorf(ctx, es)
 		http.Error(w, fmt.Sprintf(errResp, err, models.StatusJSONError), http.StatusInternalServerError)
 		return
@@ -82,19 +82,19 @@ func signResponse(ctx context.Context, r *http.Request) models.SignResponse {
 	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
 		log.Errorf(ctx, "BUCKET environment variable not set for %v", ctx)
-		return models.SignResponse{Status: "Environment variable not set", ErrorCode: models.StatusConfigError}
+		return models.SignResponse{Status: "BUCKET environment variable not set", ErrorCode: models.StatusConfigError}
 	}
 
 	d := os.Getenv("SIGNED_URL_DURATION")
 	if d == "" {
 		log.Errorf(ctx, "SIGNED_URL_DURATION environment variable not set for %v", ctx)
-		return models.SignResponse{Status: "Environment variable not set", ErrorCode: models.StatusConfigError}
+		return models.SignResponse{Status: "SIGNED_URL_DURATION environment variable not set", ErrorCode: models.StatusConfigError}
 	}
 
 	duration, err := time.ParseDuration(d)
 	if err != nil {
-		log.Errorf(ctx, "SIGNED_URL_DURATION was '%s', which is not a valid time duration.", d)
-		return models.SignResponse{Status: "Environment variable not set", ErrorCode: models.StatusConfigError}
+		log.Errorf(ctx, "SIGNED_URL_DURATION was %q, which is not a valid time duration.", d)
+		return models.SignResponse{Status: "SIGNED_URL_DURATION environment variable not set", ErrorCode: models.StatusConfigError}
 	}
 
 	resp, req := ProcessSignRequest(ctx, r, bucket, duration)
@@ -183,7 +183,7 @@ func validSignRequest(ctx context.Context, sr models.SignRequest) error {
 		// A valid Mac address can only contain hexadecimal characters and colons.
 		matched, err := regexp.MatchString(macRegEx, mac)
 		if err != nil {
-			return fmt.Errorf("regexp.MatchString(%s) returned %v", mac, err)
+			return fmt.Errorf("regexp.MatchString(%s): %v", mac, err)
 		}
 		if matched {
 			return fmt.Errorf("%s is not a valid mac address", mac)
@@ -199,13 +199,13 @@ func validSignRequest(ctx context.Context, sr models.SignRequest) error {
 		log.Warningf(ctx, "failed to validate sign request hash: %v", err)
 	}
 	if err != nil && hashCheck == "true" {
-		return fmt.Errorf("validSignHash returned %v", err)
+		return fmt.Errorf("validSignHash: %v", err)
 	}
 
 	// insert hash into seed to validate signature
 	sr.Seed.Hash = sr.Hash
 	if err := validSeed(ctx, sr.Seed, sr.Signature); err != nil {
-		return fmt.Errorf("validSeed returned %v", err)
+		return fmt.Errorf("validSeed: %v", err)
 	}
 
 	if len(sr.Path) < 1 {
@@ -225,7 +225,7 @@ func validSignHash(ctx context.Context, requestHash []byte) error {
 	}
 	acceptedHashes, err := getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
 	if err != nil {
-		return fmt.Errorf("retrieving allowlist returned error: %v", err)
+		return fmt.Errorf("cache.Get(acceptedHashes): %v", err)
 	}
 
 	log.Infof(ctx, "retrieved acceptable hashes: %#v", acceptedHashes)
@@ -252,7 +252,7 @@ func validSeed(ctx context.Context, seed models.Seed, sig []byte) error {
 
 	// Check that the username is present
 	if len(seed.Username) < 3 {
-		return fmt.Errorf("the username '%s' is invalid or empty", seed.Username)
+		return fmt.Errorf("the username %q is invalid or empty", seed.Username)
 	}
 
 	// Check that the seed is not expired or invalid.
@@ -262,7 +262,7 @@ func validSeed(ctx context.Context, seed models.Seed, sig []byte) error {
 	}
 	d, err := time.ParseDuration(validityPeriod)
 	if err != nil {
-		return fmt.Errorf("time.parseDuration(%s) returned %v", validityPeriod, err)
+		return fmt.Errorf("time.parseDuration(%s): %v", validityPeriod, err)
 	}
 	expires := seed.Issued.Add(d)
 	now := time.Now()
@@ -281,7 +281,7 @@ func validSeed(ctx context.Context, seed models.Seed, sig []byte) error {
 	}
 
 	if err := validSeedSignature(ctx, seed, sig); err != nil {
-		return fmt.Errorf("validSeedSignature returned %v", err)
+		return fmt.Errorf("validSeedSignature: %v", err)
 	}
 
 	return nil
@@ -292,7 +292,7 @@ func validSeedSignature(ctx context.Context, seed models.Seed, sig []byte) error
 	// https://cloud.google.com/appengine/docs/standard/go/appidentity/
 	certs, err := appengine.PublicCertificates(ctx)
 	if err != nil {
-		return fmt.Errorf("appengine.PublicCertificates(%+v) returned %v", ctx, err)
+		return fmt.Errorf("appengine.PublicCertificates(%+v): %v", ctx, err)
 	}
 
 	enableFallback := os.Getenv("VERIFY_SEED_SIGNATURE_FALLBACK")
@@ -305,13 +305,13 @@ func validSeedSignature(ctx context.Context, seed models.Seed, sig []byte) error
 	for _, cert := range certs {
 		block, _ := pem.Decode(cert.Data)
 		if block == nil {
-			log.Infof(ctx, "pem.Decode returned an empty block for data '%s'.", cert.Data)
+			log.Infof(ctx, "pem.Decode returned an empty block for data %q.", cert.Data)
 			continue
 		}
 
 		x509Cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
-			log.Infof(ctx, "x509.ParseCertificate(%s) returned %v.", block.Bytes, err)
+			log.Infof(ctx, "x509.ParseCertificate(%s): %v.", block.Bytes, err)
 			continue
 		}
 
@@ -331,7 +331,7 @@ func validSeedSignature(ctx context.Context, seed models.Seed, sig []byte) error
 		h.Write(jsonSeed)
 		hashed := h.Sum(nil)
 		if err := rsa.VerifyPKCS1v15(pubkey, seedHash, hashed, sig); err != nil {
-			log.Infof(ctx, "unable to verify seed %#v with signature '%s' using certificate '%#v'", seed, sig, x509Cert.Subject)
+			log.Infof(ctx, "unable to verify seed %#v with signature %q using certificate '%#v'", seed, sig, x509Cert.Subject)
 			continue
 		}
 
@@ -348,7 +348,7 @@ func validSeedSignature(ctx context.Context, seed models.Seed, sig []byte) error
 func signedURL(ctx context.Context, bucket, file string, duration time.Duration) (string, error) {
 	sa, err := appengine.ServiceAccount(ctx)
 	if err != nil {
-		return "", fmt.Errorf("appengine.ServiceAccount returned %v", err)
+		return "", fmt.Errorf("appengine.ServiceAccount: %v", err)
 	}
 
 	return storage.SignedURL(bucket, file, &storage.SignedURLOptions{
@@ -367,12 +367,12 @@ func getAllowlist(ctx context.Context, b string, f string) (map[string]bool, err
 	log.Infof(ctx, "reading acceptable hashes from cloud bucket")
 	h, err := bucketFileFinder(ctx, b, f)
 	if err != nil {
-		return nil, fmt.Errorf("bucketFileFinder returned: %v", err)
+		return nil, fmt.Errorf("bucketFileFinder(%s, %s): %v", b, f, err)
 	}
 
 	y, err := ioutil.ReadAll(h)
 	if err != nil {
-		return nil, fmt.Errorf("reading allowlist contents returned: %v", err)
+		return nil, fmt.Errorf("reading allowlist contents: %v", err)
 	}
 
 	var wls []string

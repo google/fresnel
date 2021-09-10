@@ -52,7 +52,7 @@ func (SeedRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sr, err := unmarshalSeedRequest(r)
 	if err != nil {
-		log.Errorf(ctx, "unmarshalSeedRequest returned error: %s", err)
+		log.Errorf(ctx, "unmarshalSeedRequest(): %v", err)
 		http.Error(w, fmt.Sprintf(errSeedResp, err, models.StatusJSONError), http.StatusInternalServerError)
 		return
 	}
@@ -78,7 +78,7 @@ func (SeedRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validateSeedRequest(u, sr, acceptedHashes); err != nil {
-		log.Errorf(ctx, "validateSeedRequest(%s,%#v,%#v) returned: %v", u.String(), sr, acceptedHashes, err)
+		log.Errorf(ctx, "validateSeedRequest(%s,%#v,%#v): %v", u.String(), sr, acceptedHashes, err)
 		if !strings.Contains(err.Error(), "not in allowlist") || hashCheck == "true" {
 			http.Error(w, fmt.Sprintf(errSeedResp, err, models.StatusReqUnreadable), http.StatusInternalServerError)
 			return
@@ -91,7 +91,7 @@ func (SeedRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := signSeed(ctx, s)
 	if err != nil {
-		log.Errorf(ctx, "signSeed returned: %v", err)
+		log.Errorf(ctx, "signSeed(): %v", err)
 		http.Error(w, fmt.Sprintf(errSeedResp, err, models.StatusSignError), http.StatusInternalServerError)
 		return
 	}
@@ -99,7 +99,7 @@ func (SeedRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse, err := json.Marshal(resp)
 	if err != nil {
-		es := fmt.Sprintf("json.Marshall(%v) returned: %v", resp, err)
+		es := fmt.Sprintf("json.Marshall(%v): %v", resp, err)
 		log.Errorf(ctx, es)
 		http.Error(w, fmt.Sprintf(errSeedResp, err, models.StatusJSONError), http.StatusInternalServerError)
 		return
@@ -168,7 +168,7 @@ func validateSeedRequest(u *user.User, sr models.SeedRequest, ah map[string]bool
 func signSeedResponse(ctx context.Context, s models.Seed) (models.SeedResponse, error) {
 	certs, err := appengine.PublicCertificates(ctx)
 	if err != nil {
-		return models.SeedResponse{}, fmt.Errorf("sign failed: appengine.PublicCertificates returned %v", err)
+		return models.SeedResponse{}, fmt.Errorf("appengine.PublicCertificates(): %v", err)
 	}
 	s.Certs = certs
 
@@ -205,7 +205,7 @@ func populateAllowlist(ctx context.Context) (map[string]bool, error) {
 
 	ah, err := getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("retrieving allowlist returned error: %v", err)
+		return nil, fmt.Errorf("error retrieving allowlist: %v", err)
 	}
 	return ah, nil
 }
