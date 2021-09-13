@@ -31,6 +31,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/user"
+	"github.com/patrickmn/go-cache"
 )
 
 var (
@@ -203,9 +204,19 @@ func populateAllowlist(ctx context.Context) (map[string]bool, error) {
 		return nil, errors.New("BUCKET environment variable not set")
 	}
 
-	ah, err := getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving allowlist: %v", err)
+	var err error
+	ih, found := c.Get("acceptedHashes")
+	if !found {
+		ih, err = getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
+		if err != nil {
+			return nil, fmt.Errorf("retrieving allowlist returned error: %v", err)
+		}
+		c.Set("acceptedHashes", ih, cache.DefaultExpiration)
+	}
+
+	ah, ok := ih.(map[string]bool)
+	if !ok {
+		return nil, fmt.Errorf("could not convert allowlist to map: %#v", ih)
 	}
 	return ah, nil
 }

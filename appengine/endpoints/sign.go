@@ -38,10 +38,12 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"cloud.google.com/go/storage"
+	"github.com/patrickmn/go-cache"
 	"gopkg.in/yaml.v2"
 )
 
 var (
+	c                = cache.New(1*time.Hour, 90*time.Minute)
 	macRegEx         = "([^0-9,a-f,A-F,:])"
 	bucketFileFinder = bucketFileHandle
 )
@@ -223,11 +225,10 @@ func validSignHash(ctx context.Context, requestHash []byte) error {
 	if b == "" {
 		return fmt.Errorf("BUCKET environment variable not set for %v", ctx)
 	}
-	acceptedHashes, err := getAllowlist(ctx, b, "appengine_config/pe_allowlist.yaml")
+	acceptedHashes, err := populateAllowlist(ctx)
 	if err != nil {
 		return fmt.Errorf("cache.Get(acceptedHashes): %v", err)
 	}
-
 	log.Infof(ctx, "retrieved acceptable hashes: %#v", acceptedHashes)
 
 	h := hex.EncodeToString(requestHash)
