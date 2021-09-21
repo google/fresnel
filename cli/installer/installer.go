@@ -595,7 +595,7 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll(%q, 0755) returned %v: %w", path, err, errPerm)
 	}
-	s := filepath.Join(path, `\seed.json`)
+	s := filepath.Join(path, `/seed.json`)
 	logger.V(2).Infof("Writing seed: %q.", s)
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(s, content, 0644); err != nil {
