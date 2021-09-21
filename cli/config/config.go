@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os/user"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -63,6 +64,7 @@ type distribution struct {
 	seedDest    string // The relative path where the seed should be written.
 	imageServer string // The base image is obtained here.
 	images      map[string]string
+	ffus        map[string]string // Contains SFU manifests names.
 }
 
 // Configuration represents the state of all flags and selections provided
@@ -71,6 +73,8 @@ type Configuration struct {
 	cleanup  bool
 	devices  []string
 	distro   *distribution
+	dismount bool
+	ffu      bool
 	update   bool
 	eject    bool
 	elevated bool // If the user is running as root.
@@ -80,11 +84,12 @@ type Configuration struct {
 
 // New generates a new configuration from flags passed on the command line.
 // It performs sanity checks on those parameters.
-func New(cleanup, warning, eject, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
+func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
 	// Create a partial config using known good values.
 	conf := &Configuration{
 		cleanup:  cleanup,
 		warning:  warning,
+		ffu:      ffu,
 		eject:    eject,
 		update:   update,
 	}
@@ -226,10 +231,8 @@ func (c *Configuration) Image() string {
 
 // ImageFile returns the filename of the raw image for this configuration.
 func (c *Configuration) ImageFile() string {
-	// The raw name stored may be a relative file path. Obtain that to start.
-	relative := c.distro.images[c.track]
 	// Return the filename only.
-	return regExFileName.FindString(relative)
+	return filepath.Base(c.distro.images[c.track])
 }
 
 // Cleanup returns whether or not the cleanup of temp files was requested by
@@ -248,6 +251,21 @@ func (c *Configuration) UpdateDevices(newDevices []string) {
 	c.devices = newDevices
 }
 
+// FFU returns whether or not to place the SFU files after provisioning.
+func (c *Configuration) FFU() bool {
+	return c.ffu
+}
+
+// FFUManifest returns the filename of the SFU manifest file for this configuration.
+func (c *Configuration) FFUManifest() string {
+	// Return the filename only.
+	return filepath.Base(c.distro.ffus[c.track])
+}
+
+// FFUPath returns the path to the SFU manifest.
+func (c *Configuration) FFUPath() string {
+	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.name, c.track)
+}
 
 // PowerOff returns whether or not devices should be powered off after write
 // operations.

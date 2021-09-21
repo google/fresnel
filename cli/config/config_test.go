@@ -64,7 +64,7 @@ func cmpConfig(got, want Configuration) error {
 	return nil
 }
 
-// equal compares two string slices and determins if they are the same.
+// equal compares two string slices and determines if they are the same.
 func equal(left, right []string) bool {
 	if len(left) != len(right) {
 		return false
@@ -139,7 +139,7 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		IsElevatedCmd = tt.fakeIsElevated
-		c, got := New(false, false, false, false, tt.devices, tt.os, tt.track, tt.seedServer)
+		c, got := New(false, false, false, false, false, tt.devices, tt.os, tt.track, tt.seedServer)
 		if got == tt.want {
 			continue
 		}
@@ -466,6 +466,53 @@ func TestImageFile(t *testing.T) {
 		got := c.ImageFile()
 		if got != tt.want {
 			t.Errorf("%s: ImageFile() got: %q, want: %q", tt.desc, got, tt.want)
+		}
+	}
+}
+
+func TestFFUPath(t *testing.T) {
+	track := `default`
+	distro := distribution{
+		imageServer: `https://foo.bar.com`,
+		images: map[string]string{
+			track: "manifest.json",
+		},
+		name: "nombre",
+	}
+	want := "https://foo.bar.com/nombre/default"
+	c := Configuration{track: track, distro: &distro}
+	if got := c.FFUPath(); got != want {
+		t.Errorf("FFUPath() got: %q, want: %q", got, want)
+	}
+}
+
+func TestFFUManifest(t *testing.T) {
+	tests := []struct {
+		desc string
+		ffus map[string]string
+		want string
+	}{
+		{
+			desc: "json",
+			ffus: map[string]string{"default": "manifest.json"},
+			want: "manifest.json",
+		},
+		{
+			desc: "nested json",
+			ffus: map[string]string{"default": "nested/manifest.json"},
+			want: "manifest.json",
+		},
+	}
+	for _, tt := range tests {
+		c := Configuration{
+			track: "default",
+			distro: &distribution{
+				ffus: tt.ffus,
+			},
+		}
+		got := c.FFUManifest()
+		if got != tt.want {
+			t.Errorf("%s: FFUManifest() got: %q, want: %q", tt.desc, got, tt.want)
 		}
 	}
 }

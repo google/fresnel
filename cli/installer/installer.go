@@ -105,6 +105,9 @@ type Configuration interface {
 	Image() string
 	ImageFile() string
 	Elevated() bool
+	FFU() bool
+	FFUManifest() string
+	FFUPath() string
 	PowerOff() bool
 	SeedDest() string
 	SeedFile() string

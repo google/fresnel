@@ -376,7 +376,7 @@ func TestRun(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		// Perofrm substitutions, generate the flagSet and set Flags
+		// Perform substitutions, generate the flagSet and set Flags.
 		config.IsElevatedCmd = tt.isElevatedCmd
 		search = tt.searchCmd
 		newInstaller = tt.newInstCmd

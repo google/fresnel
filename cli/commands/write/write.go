@@ -102,6 +102,10 @@ type writeCmd struct {
 	// the command. A distro specifies what track values are available.
 	distro string
 
+	// ffu determines whether split ffu files are placed on the bootable media
+	// after provisioning is complete. Defaults to false.
+	ffu bool
+
 	// track specifies the distribution track or variant of the distribution
 	// to be provisioned.
 	// Examples: 'stable', 'testing', 'unstable', 'test'.
@@ -183,7 +187,8 @@ Flags:
   --a        - Alias for --all
   --cleanup  - Cleanup temporary files after provisioning completes.
   --dismount - Dismount devices after provisioning completes.
-  --eject    - Eject/PowerOff devices after provisioniong completes.
+  --eject    - Eject/PowerOff devices after provisioning completes.
+	--ffu      - Place the split ffu files on the media after provisioning completes.
   --warning  - Display a confirmation prompt before non-installers are overwritten.
   --distro   - The os distribution to be provisioned, typically 'windows' or 'linux'
   --track    - The track (variant) of the installer to provision.
@@ -224,6 +229,7 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&c.allDrives, "a", false, "write the installer to all suitable flash drives (shorthand)")
 	f.BoolVar(&c.cleanup, "cleanup", true, "cleanup temporary files after provisioning is complete")
 	f.BoolVar(&c.eject, "eject", c.eject, "eject/power-off devices after provisioning is complete")
+	f.BoolVar(&c.ffu, "ffu", c.ffu, "place the split ffu files onto storage devices after initial provisioning")
 	f.BoolVar(&c.warning, "warning", true, "display a confirmation prompt before non-installer storage devices are overwritten")
 	f.BoolVar(&c.update, "update", c.update, "attempts to perform a device refresh only for non-admin users")
 	f.StringVar(&c.distro, "distro", c.distro, "the os distribution to be provisioned, typically 'windows' or 'linux'")
@@ -316,10 +322,10 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	// Generate a writer configuration.
-	conf, err := config.New(c.cleanup, c.warning, c.eject, c.update, f.Args(), c.distro, c.track, c.seedServer)
+	conf, err := config.New(c.cleanup, c.warning, c.eject, c.ffu, c.update, f.Args(), c.distro, c.track, c.seedServer)
 	if err != nil {
-		return fmt.Errorf("%w: config.New(cleanup: %t, warning: %t, eject: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v",
-			errConfig, c.cleanup, c.warning, c.eject, f.Args(), c.distro, c.track, c.seedServer, err)
+		return fmt.Errorf("%w: config.New(cleanup: %t, warning: %t, eject: %t, ffu: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v",
+			errConfig, c.cleanup, c.warning, c.eject, c.ffu, f.Args(), c.distro, c.track, c.seedServer, err)
 	}
 	// Write requires elevated permissions, Update does not.
 	if !c.update && !conf.Elevated() {
