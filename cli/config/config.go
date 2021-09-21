@@ -71,7 +71,6 @@ type Configuration struct {
 	cleanup  bool
 	devices  []string
 	distro   *distribution
-	dismount bool
 	update   bool
 	eject    bool
 	elevated bool // If the user is running as root.
@@ -81,12 +80,11 @@ type Configuration struct {
 
 // New generates a new configuration from flags passed on the command line.
 // It performs sanity checks on those parameters.
-func New(cleanup, warning, dismount, eject, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
+func New(cleanup, warning, eject, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
 	// Create a partial config using known good values.
 	conf := &Configuration{
 		cleanup:  cleanup,
 		warning:  warning,
-		dismount: dismount,
 		eject:    eject,
 		update:   update,
 	}
@@ -250,10 +248,6 @@ func (c *Configuration) UpdateDevices(newDevices []string) {
 	c.devices = newDevices
 }
 
-// Dismount returns whether or not devices should be dismounted.
-func (c *Configuration) Dismount() bool {
-	return c.dismount
-}
 
 // PowerOff returns whether or not devices should be powered off after write
 // operations.
@@ -314,7 +308,6 @@ func (c *Configuration) String() string {
   SeedDest    : %q
 
   Targets     : %v
-  Dismount    : %t
   PowerOff    : %t`,
 		c.Cleanup(),
 		c.Elevated(),
@@ -329,7 +322,6 @@ func (c *Configuration) String() string {
 		c.SeedFile(),
 		c.SeedDest(),
 		c.Devices(),
-		c.Dismount(),
 		c.PowerOff())
 }
 

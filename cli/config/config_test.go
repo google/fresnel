@@ -139,7 +139,7 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		IsElevatedCmd = tt.fakeIsElevated
-		c, got := New(false, false, false, false, false, tt.devices, tt.os, tt.track, tt.seedServer)
+		c, got := New(false, false, false, false, tt.devices, tt.os, tt.track, tt.seedServer)
 		if got == tt.want {
 			continue
 		}
@@ -478,19 +478,11 @@ func TestCleanup(t *testing.T) {
 	}
 }
 
-func TestDismount(t *testing.T) {
-	want := true
-	c := Configuration{dismount: want}
-	if got := c.Dismount(); got != want {
-		t.Errorf("Dismount() got: %t, want: %t", got, want)
-	}
-}
-
 func TestPowerOff(t *testing.T) {
 	want := true
 	c := Configuration{eject: want}
 	if got := c.PowerOff(); got != want {
-		t.Errorf("Dismount() got: %t, want: %t", got, want)
+		t.Errorf("PowerOff() got: %t, want: %t", got, want)
 	}
 }
 

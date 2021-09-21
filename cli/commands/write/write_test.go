@@ -231,7 +231,7 @@ func (i *fakeInstaller) Retrieve() error {
 	return i.retErr
 }
 
-func (i *fakeInstaller) Finalize([]installer.Device) error {
+func (i *fakeInstaller) Finalize([]installer.Device, bool) error {
 	return i.finErr
 }
 

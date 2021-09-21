@@ -30,9 +30,9 @@ import (
 	"testing"
 
 	"github.com/google/fresnel/cli/config"
-	"github.com/google/winops/storage"
 	"github.com/google/fresnel/models"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/winops/storage"
 )
 
 // fakeConfig inherits all members of config.Configuration through embedding.
@@ -1126,17 +1126,20 @@ func TestFinalize(t *testing.T) {
 		desc      string
 		installer *Installer
 		device    *fakeDevice
+		dismount  bool
 		want      error
 	}{
 		{
 			desc:      "detection error",
-			installer: &Installer{config: &fakeConfig{dismount: true}},
+			dismount:  true,
+			installer: &Installer{config: &fakeConfig{}},
 			device:    &fakeDevice{detectErr: errors.New("error")},
 			want:      errFinalize,
 		},
 		{
 			desc:      "dismount error",
-			installer: &Installer{config: &fakeConfig{dismount: true}},
+			dismount:  true,
+			installer: &Installer{config: &fakeConfig{}},
 			device:    &fakeDevice{dmErr: errors.New("error")},
 			want:      errDevice,
 		},
@@ -1148,7 +1151,8 @@ func TestFinalize(t *testing.T) {
 		},
 		{
 			desc:      "eject error",
-			installer: &Installer{config: &fakeConfig{dismount: true, eject: true}},
+			installer: &Installer{config: &fakeConfig{eject: true}},
+			dismount:  true,
 			device:    &fakeDevice{ejectErr: errors.New("error")},
 			want:      errIO,
 		},
@@ -1160,7 +1164,7 @@ func TestFinalize(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		got := tt.installer.Finalize([]Device{tt.device})
+		got := tt.installer.Finalize([]Device{tt.device}, tt.dismount)
 		if !errors.Is(got, tt.want) {
 			t.Errorf("%s: Finalize() got: %v, want: %v", tt.desc, got, tt.want)
 		}

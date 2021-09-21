@@ -252,7 +252,7 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 // imageInstaller represents installer.Installer.
 type imageInstaller interface {
 	Cache() string
-	Finalize([]installer.Device) error
+	Finalize([]installer.Device, bool) error
 	Retrieve() error
 	Prepare(installer.Device) error
 	Provision(installer.Device) error
@@ -316,10 +316,10 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	// Generate a writer configuration.
-	conf, err := config.New(c.cleanup, c.warning, c.dismount, c.eject, c.update, f.Args(), c.distro, c.track, c.seedServer)
+	conf, err := config.New(c.cleanup, c.warning, c.eject, c.update, f.Args(), c.distro, c.track, c.seedServer)
 	if err != nil {
-		return fmt.Errorf("%w: config.New(cleanup: %t, warning: %t, dismount: %t, eject: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v",
-			errConfig, c.cleanup, c.warning, c.dismount, c.eject, f.Args(), c.distro, c.track, c.seedServer, err)
+		return fmt.Errorf("%w: config.New(cleanup: %t, warning: %t, eject: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v",
+			errConfig, c.cleanup, c.warning, c.eject, f.Args(), c.distro, c.track, c.seedServer, err)
 	}
 	// Write requires elevated permissions, Update does not.
 	if !c.update && !conf.Elevated() {
@@ -391,7 +391,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	// actions if configuration states to do so. Cleanup is performed only after
 	// the last device has been finalized.
 	defer func(devices []installer.Device) {
-		if err2 := i.Finalize(devices); err2 != nil {
+		if err2 := i.Finalize(devices, c.dismount); err2 != nil {
 			if err == nil {
 				err = fmt.Errorf("%w: Finalize() returned %v", errFinalize, err2)
 			} else {

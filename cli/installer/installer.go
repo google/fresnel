@@ -101,7 +101,6 @@ type httpDoer interface {
 
 // Configuration represents config.Configuration.
 type Configuration interface {
-	Dismount() bool
 	DistroLabel() string
 	Image() string
 	ImageFile() string
@@ -675,9 +674,9 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 // re-used during Preparation and Provisioning steps. If the cache exists
 // it is automatically cleaned up. Optionally, the device can also be
 // dismounted and/or powered off during the Finalize step.
-func (i *Installer) Finalize(devices []Device) error {
+func (i *Installer) Finalize(devices []Device, dismount bool) error {
 	for _, device := range devices {
-		if i.config.Dismount() {
+		if dismount {
 			logger.V(2).Infof("Refreshing partition information for %q prior to dismount.", device.Identifier())
 			if err := device.DetectPartitions(false); err != nil {
 				return fmt.Errorf("DetectPartitions() for %q returned %v: %w", device.Identifier(), err, errFinalize)
