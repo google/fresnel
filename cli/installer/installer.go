@@ -51,6 +51,7 @@ var (
 	connect         = fetcherConnect
 	connectWithCert = tlsConnect
 	downloadFile    = download
+	getManifest     = readManifest
 	mount           = mountISO
 	selectPart      = selectPartition
 	writeISOFunc    = writeISO
@@ -69,6 +70,7 @@ var (
 	errFormat      = errors.New("format error")
 	errInput       = errors.New("input error")
 	errIO          = errors.New("io error")
+	errManifest    = errors.New("manifest error")
 	errMount       = errors.New("mount error")
 	errNotEmpty    = errors.New("device not empty")
 	errPartition   = errors.New("partitioning error")
@@ -414,6 +416,36 @@ func readManifest(path string) ([]SFUManifest, error) {
 		return nil, fmt.Errorf("%w: %v", errUnmarshal, err)
 	}
 	return sfus, nil
+}
+
+// DownloadSFU downloads the SFU file and places it in the cache.
+func (i *Installer) DownloadSFU() error {
+	if i.cache == "" {
+		return fmt.Errorf("missing cache location: %w", errCache)
+	}
+	sfus, err := getManifest(filepath.Join(i.cache, i.config.FFUManifest()))
+	if err != nil {
+		return fmt.Errorf("readManifest() %w: %v", errManifest, err)
+	}
+	// Connect to the download server and retrieve the file.
+	client, err := connectWithCert()
+	if err != nil {
+		return fmt.Errorf("fetcher.TLSClient() returned %w: %v", errConnect, err)
+	}
+	for _, sfu := range sfus {
+		path := filepath.Join(i.cache, sfu.Filename)
+		f, err := os.Create(path)
+		if err != nil {
+			return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", i.cache, i.config.FFUManifest(), errFile, err)
+		}
+		defer f.Close()
+
+		if err := downloadFile(client, fmt.Sprintf(`%s/%s`, i.config.FFUPath(), sfu.Filename), f); err != nil {
+			return fmt.Errorf("DownloadSFU() returned %w: %v", errDownload, err)
+		}
+
+	}
+	return nil
 }
 
 // selectPartition wraps device.SelectPartition and returns its output wrapped

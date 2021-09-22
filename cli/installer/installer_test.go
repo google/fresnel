@@ -55,6 +55,9 @@ type fakeConfig struct {
 	seedDest    string
 	seedFile    string
 	seedServer  string
+	track       string
+	ffuPath     string
+	ffuManifest string
 }
 
 func (f *fakeConfig) Dismount() bool {
@@ -95,6 +98,14 @@ func (f *fakeConfig) SeedServer() string {
 
 func (f *fakeConfig) UpdateOnly() bool {
 	return f.update
+}
+
+func (f *fakeConfig) FFUManifest() string {
+	return f.ffuManifest
+}
+
+func (f *fakeConfig) FFUPath() string {
+	return f.ffuPath
 }
 
 func TestNew(t *testing.T) {
@@ -1117,6 +1128,77 @@ func TestSeedRequest(t *testing.T) {
 		}
 		if diff := cmp.Diff(tt.out, out); diff != "" {
 			t.Errorf("%s: seedRequest output mismatch (-want +got):\n%s", tt.desc, diff)
+		}
+	}
+}
+
+func fakeReadManifest() []SFUManifest {
+	return []SFUManifest{
+		SFUManifest{
+			Filename: "testsfu.sfu",
+		},
+		SFUManifest{
+			Filename: "testsfu2.sfu",
+		},
+		SFUManifest{
+			Filename: "testsfu3.sfu",
+		},
+	}
+}
+
+func TestDownloadSFU(t *testing.T) {
+	// Setup a temp folder.
+	fakeCache, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("ioutil.TempDir('', '') returned %v", err)
+	}
+	c := &fakeConfig{
+		track:       "stable",
+		ffuPath:     "https://www.somebody.com/once/windows/stable/",
+		ffuManifest: "manifest.json",
+	}
+	tests := []struct {
+		desc         string
+		installer    *Installer
+		download     func(client httpDoer, path string, w io.Writer) error
+		fakeManifest func(string) ([]SFUManifest, error)
+		want         error
+	}{
+		{
+			desc:         "download success",
+			installer:    &Installer{cache: fakeCache, config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), nil },
+			want:         nil,
+		},
+		{
+			desc:         "missing cache",
+			installer:    &Installer{cache: "", config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), nil },
+			want:         errCache,
+		},
+		{
+			desc:         "manifest error",
+			installer:    &Installer{cache: fakeCache, config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), errManifest },
+			want:         errManifest,
+		},
+		{
+			desc:         "download error",
+			installer:    &Installer{cache: fakeCache, config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return errDownload },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), nil },
+			want:         errDownload,
+		},
+	}
+	for _, tt := range tests {
+		getManifest = tt.fakeManifest
+		downloadFile = tt.download
+		got := tt.installer.DownloadSFU()
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: DownloadSFU() got: %v, want: %v", tt.desc, got, tt.want)
 		}
 	}
 }
