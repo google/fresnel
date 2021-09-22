@@ -81,6 +81,7 @@ var (
 	errResponse    = errors.New(`response error`)
 	errStatus      = errors.New(`status error`)
 	errSeed        = errors.New(`seed error`)
+	errUnmarshal   = errors.New(`unmarshalling error`)
 	errUnsupported = errors.New(`unsupported`)
 	errUser        = errors.New(`user detection error`)
 	errWipe        = errors.New(`device wipe error`)
@@ -153,6 +154,11 @@ type isoHandler interface {
 type Installer struct {
 	cache  string        // The path where temporary files are cached.
 	config Configuration // The configuration for this installer.
+}
+
+// SFUManifest struct for SFU manifest json.
+type SFUManifest struct {
+	Filename string
 }
 
 // New generates a new Installer from a configuration, with all the
@@ -393,6 +399,22 @@ func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
 		logger.Warningf("Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.", part.Label(), i.config.DistroLabel())
 	}
 	return nil
+}
+
+// readManifest ingests the downloaded FFU manifest and returns
+// an array object.
+func readManifest(path string) ([]SFUManifest, error) {
+	// sfus represents the json struct for the SFU manifest.
+	var sfus []SFUManifest
+	manifest, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("%w failed to read file: %v", errFile, err)
+	}
+	console.Printf("Opened sfu manifest %s", path)
+	if err := json.Unmarshal(manifest, &sfus); err != nil {
+		return nil, fmt.Errorf("%w: %v", errUnmarshal, err)
+	}
+	return sfus, nil
 }
 
 // selectPartition wraps device.SelectPartition and returns its output wrapped

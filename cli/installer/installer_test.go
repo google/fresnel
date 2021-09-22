@@ -1121,6 +1121,64 @@ func TestSeedRequest(t *testing.T) {
 	}
 }
 
+func createFakeJSON(name, fakeJSON, cache string) error {
+
+	// A fake manifest for testing.
+	fakeJSONPath := filepath.Join(cache, name)
+	if _, err := os.Create(fakeJSONPath); err != nil {
+		return fmt.Errorf("os.Create(%q) returned %v", fakeJSONPath, err)
+	}
+	return ioutil.WriteFile(fakeJSONPath, []byte(fakeJSON), 0644)
+}
+
+func TestReadManifest(t *testing.T) {
+	// A fake cache for testing.
+	fakeCache, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("ioutil.TempDir('', '') returned %v", err)
+	}
+	// Valid JSON data for tests.
+	testJSON := `[{"filename": "testsfu.sfu"}, {"filename": "testsfu2.sfu"}]`
+	// Bad JSON data for tests.
+	badJSON := `[dasd{"filename": "testsfu.sfu"}, {"filename": "testsfu2.sfu"}]`
+
+	if err := createFakeJSON("good.json", testJSON, fakeCache); err != nil {
+		t.Fatalf("createFakeJSON(%q) returned %v", testJSON, err)
+	}
+	if err := createFakeJSON("bad.json", badJSON, fakeCache); err != nil {
+		t.Fatalf("createFakeJSON(%q) returned %v", badJSON, err)
+	}
+
+	tests := []struct {
+		desc string
+		path string
+		want error
+	}{
+		{
+			desc: "bad path",
+			path: fmt.Sprintf("%s/%s", fakeCache, ""),
+			want: errFile,
+		},
+		{
+			desc: "malformed json",
+			path: fmt.Sprintf("%s/%s", fakeCache, "bad.json"),
+			want: errUnmarshal,
+		},
+		{
+			desc: "success",
+			path: fmt.Sprintf("%s/%s", fakeCache, "good.json"),
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		_, got := readManifest(tt.path)
+
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: readManifest() got: %v, want: %v", tt.desc, got, tt.want)
+		}
+	}
+}
+
 func TestFinalize(t *testing.T) {
 	tests := []struct {
 		desc      string
