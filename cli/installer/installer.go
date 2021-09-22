@@ -56,35 +56,34 @@ var (
 	writeISOFunc    = writeISO
 
 	// Wrapped errors for testing.
-	errAssert      = errors.New(`assertion error`)
-	errCache       = errors.New(`cache error`)
-	errConfig      = errors.New(`config error`)
-	errConnect     = errors.New(`connect error`)
-	errDownload    = errors.New(`download error`)
-	errDevice      = errors.New(`device error`)
-	errElevation   = errors.New(`elevation error`)
-	errEmpty       = errors.New("device empty")
-	errEmptyUser   = errors.New(`empty user error`)
-	errFile        = errors.New(`file error`)
-	errFinalize    = errors.New(`finalize error`)
-	errFormat      = errors.New(`format error`)
-	errInput       = errors.New(`input error`)
-	errIO          = errors.New(`io error`)
-	errMount       = errors.New(`mount error`)
+	errCache       = errors.New("missing cache")
+	errConfig      = errors.New("invalid config")
+	errConnect     = errors.New("connect error")
+	errDownload    = errors.New("download error")
+	errDevice      = errors.New("device error")
+	errElevation   = errors.New("elevation is required for this operation")
+	errEmpty       = errors.New("iso is empty")
+	errEmptyUser   = errors.New("could not determine username")
+	errFile        = errors.New("file error")
+	errFinalize    = errors.New("finalize error")
+	errFormat      = errors.New("format error")
+	errInput       = errors.New("input error")
+	errIO          = errors.New("io error")
+	errMount       = errors.New("mount error")
 	errNotEmpty    = errors.New("device not empty")
-	errPartition   = errors.New(`partitioning error`)
-	errPath        = errors.New(`path error`)
-	errPerm        = errors.New(`permissions error`)
-	errPost        = errors.New(`post error`)
-	errPrepare     = errors.New(`preparation error`)
-	errProvision   = errors.New(`provisioning error`)
-	errResponse    = errors.New(`response error`)
-	errStatus      = errors.New(`status error`)
-	errSeed        = errors.New(`seed error`)
-	errUnmarshal   = errors.New(`unmarshalling error`)
-	errUnsupported = errors.New(`unsupported`)
-	errUser        = errors.New(`user detection error`)
-	errWipe        = errors.New(`device wipe error`)
+	errPartition   = errors.New("partitioning error")
+	errPath        = errors.New("path error")
+	errPerm        = errors.New("permissions error")
+	errPost        = errors.New("http post error")
+	errPrepare     = errors.New("preparation error")
+	errProvision   = errors.New("provisioning error")
+	errResponse    = errors.New("requested boot image is not in allowlist")
+	errStatus      = errors.New("invalid status code")
+	errSeed        = errors.New("invalid seed response")
+	errUnmarshal   = errors.New("unmarshalling error")
+	errUnsupported = errors.New("unsupported")
+	errUser        = errors.New("user detection error")
+	errWipe        = errors.New("device wipe error")
 
 	// ErrLabel is made public to that callers can warn on mismatches.
 	ErrLabel = errors.New(`label error`)
@@ -165,7 +164,7 @@ type SFUManifest struct {
 // information needed to provision the installer on an available device.
 func New(config Configuration) (*Installer, error) {
 	if config == nil {
-		return nil, fmt.Errorf("empty config: %w", errConfig)
+		return nil, errConfig
 	}
 
 	// Connect serves only to give an early warning if the SSO token is expired.
@@ -212,7 +211,7 @@ func username() (string, error) {
 		username = os.Getenv("SUDO_USER")
 	}
 	if username == "" {
-		return "", fmt.Errorf("could not determine username: %w", errEmptyUser)
+		return "", errEmptyUser
 	}
 	return username, nil
 }
@@ -223,10 +222,10 @@ func username() (string, error) {
 func (i *Installer) Retrieve() (err error) {
 	// Confirm that the Installer has what we need.
 	if i.config.Image() == "" {
-		return fmt.Errorf("missing image path: %w", errConfig)
+		return fmt.Errorf("%w: missing image path", errConfig)
 	}
 	if i.cache == "" {
-		return fmt.Errorf("missing cache location: %w", errCache)
+		return errCache
 	}
 
 	// Obtain an io.Writer for the installer image file. We will use this later
@@ -282,7 +281,7 @@ func download(client httpDoer, path string, w io.Writer) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to get %q with response %d: %w", path, resp.StatusCode, errStatus)
+		return fmt.Errorf("%w for %q with response %d", errStatus, path, resp.StatusCode)
 	}
 
 	// Provide updates during the download.
@@ -301,7 +300,7 @@ func download(client httpDoer, path string, w io.Writer) error {
 func (i *Installer) Prepare(d Device) error {
 	// Sanity check inputs.
 	if i.config == nil {
-		return fmt.Errorf("installer missing config: %w", errConfig)
+		return errConfig
 	}
 	if i.config.ImageFile() == "" {
 		return fmt.Errorf("missing image: %w", errInput)
@@ -339,13 +338,13 @@ func (i *Installer) Prepare(d Device) error {
 func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
 	logger.V(2).Infof("Preparing %q for ISO with elevation.", d.Identifier())
 	if !i.config.Elevated() {
-		return fmt.Errorf("elevation is required for this operation: %w", errElevation)
+		return errElevation
 	}
 	// Preparing a device for an ISO follows these steps:
 	// Wipe -> Re-Partition -> Format
 	logger.V(2).Infof("Wiping %q.", d.Identifier())
 	if err := d.Wipe(); err != nil {
-		return fmt.Errorf("Wipe returned %v: %w", err, errWipe)
+		return fmt.Errorf("%w: Wipe() returned %v", errWipe, err)
 	}
 	logger.V(2).Infof("Partitioning %q.", d.Identifier())
 	if err := d.Partition(i.config.DistroLabel()); err != nil {
@@ -392,7 +391,7 @@ func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
 	}
 	logger.V(2).Infof("Preparing to erase contents of %q (device: %q, partition %q).", part.Label(), d.Identifier(), part.Identifier())
 	if err := part.Erase(); err != nil {
-		return fmt.Errorf("partition.Erase() returned %v: %w", err, errWipe)
+		return fmt.Errorf("%w: partition.Erase() returned %v", errWipe, err)
 	}
 	if !strings.Contains(part.Label(), i.config.DistroLabel()) {
 		console.Printf("\nWarning: Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.\n", part.Identifier(), i.config.DistroLabel())
@@ -440,10 +439,10 @@ func (i *Installer) Provision(d Device) error {
 	// Sanity check inputs and configuration. Device checks are left to the
 	// specific format based provisioning call itself.
 	if i.config == nil {
-		return fmt.Errorf("installer missing config: %w", errConfig)
+		return errConfig
 	}
 	if i.cache == "" {
-		return fmt.Errorf("missing cache: %w", errCache)
+		return errCache
 	}
 	if i.config.ImageFile() == "" {
 		return fmt.Errorf("missing image: %w", errInput)
@@ -564,7 +563,7 @@ func writeISO(iso isoHandler, part partition) error {
 		return fmt.Errorf("iso not mounted: %w", errInput)
 	}
 	if len(iso.Contents()) < 1 {
-		return fmt.Errorf("iso is empty: %w", errEmpty)
+		return errEmpty
 	}
 	return iso.Copy(part.MountPoint())
 }
@@ -670,7 +669,7 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 	// Post the request and obtain a response.
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("http post returned %v: %w", err, errPost)
+		return nil, fmt.Errorf("%w: %v", errPost, err)
 	}
 	defer resp.Body.Close()
 	respBody, err := ioutil.ReadAll(resp.Body)
@@ -679,7 +678,7 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 	}
 	// If the server responded that the hash is not in the allowlist, return.
 	if strings.Contains(fmt.Sprintf("%s", respBody), "not in allowlist") {
-		return nil, fmt.Errorf("requested boot image (%q) is not in allowlist: %w", hash, errResponse)
+		return nil, fmt.Errorf("%w: %q", errResponse, hash)
 	}
 
 	r := &models.SeedResponse{}
@@ -687,7 +686,7 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 		return nil, fmt.Errorf("json.Unmarhsal(%s) returned %v: %w", respBody, err, errFormat)
 	}
 	if r.ErrorCode != models.StatusSuccess {
-		return nil, fmt.Errorf("seed response was %v %d: %w", r.Status, r.ErrorCode, errSeed)
+		return nil, fmt.Errorf("%w: %v %d", errSeed, r.Status, r.ErrorCode)
 	}
 	return r, nil
 }
