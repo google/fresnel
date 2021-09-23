@@ -1203,6 +1203,95 @@ func TestDownloadSFU(t *testing.T) {
 	}
 }
 
+// createFakeSFU is used to create a set of fake SFU files.
+func createFakeSFU(fakeCache string) error {
+	sfus := fakeReadManifest()
+	for _, sfu := range sfus {
+		path := filepath.Join(fakeCache, sfu.Filename)
+		f, err := os.Create(path)
+		if err != nil {
+			return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", fakeCache, sfu.Filename, errFile, err)
+		}
+		defer f.Close()
+	}
+	return nil
+}
+
+func TestPlaceSFU(t *testing.T) {
+	// Setup a temp folder.
+	fakeCache, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("ioutil.TempDir('', '') returned %v", err)
+	}
+	if err := createFakeSFU(fakeCache); err != nil {
+		t.Fatalf("createFakeSFU(%s) returned: %v", fakeCache, err)
+	}
+
+	// Temp folders representing file system contents.
+	mount, contents, err := fakeFileSystems()
+	if err != nil {
+		t.Fatalf("fakeFileSystems() returned %v", err)
+	}
+	defer os.RemoveAll(mount)
+
+	c := &fakeConfig{
+		track:       "stable",
+		ffuManifest: "manifest.json",
+	}
+	tests := []struct {
+		desc         string
+		installer    *Installer
+		download     func(client httpDoer, path string, w io.Writer) error
+		fakeManifest func(string) ([]SFUManifest, error)
+		device       *fakeDevice
+		selPart      func(Device, uint64, storage.FileSystem) (partition, error)
+		want         error
+	}{
+		{
+			desc:         "successful place",
+			installer:    &Installer{cache: fakeCache, config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), nil },
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{mount: mount, contents: contents}, nil
+			},
+			device: &fakeDevice{},
+			want:   nil,
+		},
+		{
+			desc:         "manifest error",
+			installer:    &Installer{cache: fakeCache, config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), errManifest },
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{mount: mount, contents: contents}, nil
+			},
+			device: &fakeDevice{},
+			want:   errManifest,
+		},
+		{
+			desc:         "partition select failure",
+			installer:    &Installer{cache: fakeCache, config: c},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), nil },
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{mount: mount, contents: contents}, errPartition
+			},
+			device: &fakeDevice{},
+			want:   errPartition,
+		},
+	}
+	for _, tt := range tests {
+		getManifest = tt.fakeManifest
+		downloadFile = tt.download
+		selectPart = tt.selPart
+		got := tt.installer.PlaceSFU(tt.device)
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: PlaceSFU() got: %v, want: %v", tt.desc, got, tt.want)
+		}
+	}
+}
+
 func createFakeJSON(name, fakeJSON, cache string) error {
 
 	// A fake manifest for testing.

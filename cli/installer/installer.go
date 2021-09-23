@@ -93,6 +93,9 @@ var (
 	// Regex for file matching.
 	regExFileExt  = regexp.MustCompile(`\.[A-Za-z.]+`)
 	regExFileName = regexp.MustCompile(`[\w,\s-]+\.[A-Za-z.]+$`)
+
+	// minSFUPartSize represents the minimum partition size for SFU workflow.
+	minSFUPartSize = 12 * oneGB
 )
 
 // httpDoer represents an http client that can retrieve files with the Do
@@ -444,6 +447,48 @@ func (i *Installer) DownloadSFU() error {
 			return fmt.Errorf("DownloadSFU() returned %w: %v", errDownload, err)
 		}
 
+	}
+	return nil
+}
+
+// PlaceSFU copies SFU files onto provisioned media from the local cache.
+func (i *Installer) PlaceSFU(d Device) error {
+	// Find a compatible partition to write the FFU to.
+	logger.V(2).Infof("Searching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32)
+	p, err := selectPart(d, minSFUPartSize, storage.FAT32)
+	if err != nil {
+		return fmt.Errorf("SelectPartition(%q, %q, %q) returned %w: %v", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32, errPartition, err)
+	}
+	sfus, err := getManifest(filepath.Join(i.cache, i.config.FFUManifest()))
+	if err != nil {
+		return fmt.Errorf("getManifest() returned: %w: %v", errManifest, err)
+	}
+	for _, sfu := range sfus {
+		sfu := sfu
+		func() error{
+			path := filepath.Join(i.cache, sfu.Filename)
+			newPath := filepath.Join(p.MountPoint(), sfu.Filename)
+			// Add colon for windows paths if its a drive root.
+			if runtime.GOOS == "windows" && len(p.MountPoint()) < 2 {
+				newPath = filepath.Join(fmt.Sprintf("%s:", p.MountPoint()), sfu.Filename)
+			}
+			source, err := os.Open(path)
+			if err != nil {
+				return fmt.Errorf("%w: couldn't open file(%s) from cache: %v", errPath, path, err)
+			}
+			defer source.Close()
+			destination, err := os.Create(newPath)
+			if err != nil {
+				return fmt.Errorf("%w: couldn't create target file(%s): %v", errFile, path, err)
+			}
+			defer destination.Close()
+			cBytes, err := io.Copy(destination, source)
+			if err != nil {
+				return fmt.Errorf("failed to copy file to %s: %v", newPath, err)
+			}
+			console.Printf("Copied %d bytes", cBytes)
+		return nil
+		}()
 	}
 	return nil
 }
