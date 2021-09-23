@@ -42,15 +42,17 @@ var (
 	binaryName string
 
 	// Wrapped errors for testing.
-	errConfig    = errors.New(`config error`)
-	errDevice    = errors.New(`device error`)
-	errInstaller = errors.New(`installer error`)
-	errElevation = errors.New(`elevation error`)
-	errFinalize  = errors.New(`finalize error`)
-	errPrepare   = errors.New(`prepare error`)
-	errProvision = errors.New(`provision error`)
-	errRetrieve  = errors.New(`retrieve error`)
-	errSearch    = errors.New(`search error`)
+	errConfig    = errors.New("config error")
+	errCopy      = errors.New("sfu file copy error")
+	errDevice    = errors.New("device error")
+	errDownload  = errors.New("sfu download error")
+	errInstaller = errors.New("installer error")
+	errElevation = errors.New("elevation error")
+	errFinalize  = errors.New("finalize error")
+	errPrepare   = errors.New("prepare error")
+	errProvision = errors.New("provision error")
+	errRetrieve  = errors.New("retrieve error")
+	errSearch    = errors.New("search error")
 
 	// Dependency Injections for testing
 	execute      = run
@@ -71,6 +73,7 @@ func init() {
 	// e.g. 'image-writer windows sdc' instead of 'image-writer write -distro=windows sdc'.
 	subcommands.Register(&writeCmd{name: "write"}, "")
 	subcommands.Register(&writeCmd{name: "windows", distro: "windows", track: "stable"}, "")
+	subcommands.Register(&writeCmd{name: "windowsffu", distro: "windowsffu", track: "stable", ffu: true}, "")
 	subcommands.Register(&writeCmd{name: "windows-testing", distro: "windows", track: "testing"}, "")
 	subcommands.Register(&writeCmd{name: "windows-unstable", distro: "windows", track: "unstable"}, "")
 	subcommands.Register(&writeCmd{name: "update", distro: "windows", track: "stable", update: true}, "")
@@ -260,6 +263,8 @@ type imageInstaller interface {
 	Cache() string
 	Finalize([]installer.Device, bool) error
 	Retrieve() error
+	DownloadSFU() error
+	PlaceSFU(installer.Device) error
 	Prepare(installer.Device) error
 	Provision(installer.Device) error
 }
@@ -425,6 +430,16 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		// Provision the device.
 		if err := i.Provision(device); err != nil {
 			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
+		}
+		if c.ffu {
+			console.Printf("Download SFU Files...")
+			if err := i.DownloadSFU(); err != nil {
+				return fmt.Errorf("%w: %v", errDownload, err)
+			}
+			console.Printf("Copying SFU Files to %s...", device.FriendlyName())
+			if err := i.PlaceSFU(device); err != nil {
+				return fmt.Errorf("%w: %v", errCopy, err)
+			}
 		}
 	}
 	return nil
