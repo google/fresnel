@@ -68,6 +68,7 @@ var (
 	errFile        = errors.New("file error")
 	errFinalize    = errors.New("finalize error")
 	errFormat      = errors.New("format error")
+	errImage       = errors.New("image download error")
 	errInput       = errors.New("input error")
 	errIO          = errors.New("io error")
 	errManifest    = errors.New("manifest error")
@@ -221,31 +222,21 @@ func username() (string, error) {
 	return username, nil
 }
 
-// Retrieve locates and obtains the installer image, placing it in the
-// temporary directory. Where additional metadata should be obtained
-// or checked (such as a signature or a seed) prior to returning.
-func (i *Installer) Retrieve() (err error) {
-	// Confirm that the Installer has what we need.
-	if i.config.Image() == "" {
-		return fmt.Errorf("%w: missing image path", errConfig)
-	}
-	if i.cache == "" {
-		return errCache
-	}
-
-	// Obtain an io.Writer for the installer image file. We will use this later
-	// to provide status messages during the download process. Cleanup of this
-	// temporary directory is handled as part of Finalize.
-	path := filepath.Join(i.cache, i.config.ImageFile())
+// retrieveFile locates and obtains the files,
+// placing them in the temporary directory.
+// Where additional metadata should be obtained or checked
+// (such as a signature or a seed) prior to returning.
+func (i *Installer) retrieveFile(fileName, filePath string) (err error) {
+	path := filepath.Join(i.cache, fileName)
 	f, err := os.Create(path)
 	if err != nil {
-		return fmt.Errorf("ioutil.TempFile(%q, %q) returned %v: %w", i.cache, i.config.ImageFile(), err, errFile)
+		return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", i.cache, fileName, errFile, err)
 	}
 	// Close the file on return.
 	defer func() {
 		if err2 := f.Close(); err2 != nil {
 			if err != nil {
-				err = fmt.Errorf("%v %v", err, err2)
+				err = fmt.Errorf("%w %v", err2, err)
 				return
 			}
 			err = err2
@@ -255,9 +246,42 @@ func (i *Installer) Retrieve() (err error) {
 	// Connect to the download server and retrieve the file.
 	client, err := connectWithCert()
 	if err != nil {
-		return fmt.Errorf("fetcher.TLSClient() returned %v: %w", err, errConnect)
+		return fmt.Errorf("fetcher.TLSClient() returned %w: %v", errConnect, err)
 	}
-	return downloadFile(client, i.config.Image(), f)
+	return downloadFile(client, filePath, f)
+}
+
+// Retrieve passes the necessary parameters to retrieveFile
+// depending on whether or not the distribution will be FFU based.
+func (i *Installer) Retrieve() (err error) {
+	// Confirm that the Installer has what we need.
+	if i.config.Image() == "" {
+		return fmt.Errorf("%w: missing image path", errConfig)
+	}
+	if i.cache == "" {
+		return errCache
+	}
+
+	// If FFU is false, retrieve only the image file.
+	// Otherwise retrieve the image file and FFU manifest.
+	if !i.config.FFU() {
+		return i.retrieveFile(i.config.ImageFile(), i.config.Image())
+	}
+
+	// Check FFU Path configuration
+	if i.config.FFUPath() == "" {
+		return fmt.Errorf("missing FFU path: %w", errConfig)
+	}
+
+	// Check FFU Manifest configuration
+	if i.config.FFUManifest() == "" {
+		return fmt.Errorf("missing FFU manifest: %w", errConfig)
+	}
+
+	if err := i.retrieveFile(i.config.ImageFile(), i.config.Image()); err != nil {
+		return fmt.Errorf("%w: %v", errImage, err)
+	}
+	return i.retrieveFile(i.config.FFUManifest(), fmt.Sprintf("%s/%s", i.config.FFUPath(), i.config.FFUManifest()))
 }
 
 // download obtains the installer using the provided client and writes it

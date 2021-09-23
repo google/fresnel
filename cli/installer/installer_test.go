@@ -46,6 +46,7 @@ type fakeConfig struct {
 	dismount bool
 	eject    bool
 	elevated bool
+	ffu      bool
 	update   bool
 	err      error // the error returned when isElevated is called.
 
@@ -98,6 +99,10 @@ func (f *fakeConfig) SeedServer() string {
 
 func (f *fakeConfig) UpdateOnly() bool {
 	return f.update
+}
+
+func (f *fakeConfig) FFU() bool {
+	return f.ffu
 }
 
 func (f *fakeConfig) FFUManifest() string {
@@ -201,13 +206,8 @@ func TestUserName(t *testing.T) {
 }
 
 func TestRetrieve(t *testing.T) {
-	// Generate a fake config to use with Installer.
-	c := &fakeConfig{
-		image:     `https://foo.bar.com/test_installer.img`,
-		imageFile: `test_installer.img`,
-	}
 	// Setup a temp folder.
-	cache, err := ioutil.TempDir("", "test")
+	fakeCache, err := ioutil.TempDir("", "test")
 	if err != nil {
 		t.Fatalf(`ioutil.TempDir("", "test") returned %v`, err)
 	}
@@ -224,26 +224,48 @@ func TestRetrieve(t *testing.T) {
 			want:      errConfig,
 		},
 		{
-			desc:      "missing cache",
-			installer: &Installer{config: c},
-			want:      errCache,
+			desc: "missing ffu path",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				image:     `https://foo.bar.com/test_installer.img`,
+				imageFile: `test_installer.img`,
+				ffuPath:   ``,
+				ffu:       true,
+			}},
+			want: errConfig,
 		},
 		{
-			desc:      "image file failure",
-			installer: &Installer{cache: `\0`, config: c},
-			want:      errFile,
+			desc: "missing ffu manifest",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				image:       `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				ffuPath:     `https://foo.bar.com/once/OS/stable/`,
+				ffu:         true,
+				ffuManifest: "",
+			}},
+			want: errConfig,
 		},
 		{
-			desc:      "download failure",
-			installer: &Installer{cache: cache, config: c},
-			download:  func(client httpDoer, path string, w io.Writer) error { return errInput },
-			want:      errInput,
+			desc: "missing cache",
+			installer: &Installer{config: &fakeConfig{
+				image:       `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				ffuPath:     `https://foo.bar.com/once/OS/stable/`,
+				ffu:         true,
+				ffuManifest: "manifest.json",
+			}},
+			want: errCache,
 		},
 		{
-			desc:      "download success",
-			installer: &Installer{cache: cache, config: c},
-			download:  func(client httpDoer, path string, w io.Writer) error { return nil },
-			want:      nil,
+			desc: "download success",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				image:       `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				ffuPath:     `https://foo.bar.com/once/OS/stable/`,
+				ffu:         true,
+				ffuManifest: "manifest.json",
+			}},
+			download: func(client httpDoer, path string, w io.Writer) error { return nil },
+			want:     nil,
 		},
 	}
 	for _, tt := range tests {
@@ -254,8 +276,67 @@ func TestRetrieve(t *testing.T) {
 		}
 	}
 	// Cleanup
-	if err := os.RemoveAll(cache); err != nil {
-		t.Errorf(`cleanup of %q returned %v`, cache, err)
+	if err := os.RemoveAll(fakeCache); err != nil {
+		t.Errorf(`cleanup of %q returned %v`, fakeCache, err)
+	}
+}
+
+func TestRetrieveFile(t *testing.T) {
+
+	// Setup a temp folder.
+	fakeCache, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Fatalf(`ioutil.TempDir("", "test") returned %v`, err)
+	}
+
+	tests := []struct {
+		desc      string
+		filePath  string
+		fileName  string
+		installer *Installer
+		doer      func() (httpDoer, error)
+		download  func(client httpDoer, path string, w io.Writer) error
+		want      error
+	}{
+		{
+			desc:      "connection error",
+			filePath:  "https://foo.bar.com/test_installer.img",
+			fileName:  "test_installer.img",
+			installer: &Installer{cache: fakeCache},
+			doer:      func() (httpDoer, error) { return &fakeHTTPDoer{}, errConnect },
+			download:  func(client httpDoer, path string, w io.Writer) error { return nil },
+			want:      errConnect,
+		},
+		{
+			desc:      "download failure",
+			filePath:  "https://foo.bar.com/test_installer.img",
+			fileName:  "test_installer.img",
+			installer: &Installer{cache: fakeCache},
+			doer:      func() (httpDoer, error) { return &fakeHTTPDoer{}, nil },
+			download:  func(client httpDoer, path string, w io.Writer) error { return errDownload },
+			want:      errDownload,
+		},
+		{
+			desc:      "download success",
+			filePath:  "https://foo.bar.com/test_installer.img",
+			fileName:  "test_installer.img",
+			installer: &Installer{cache: fakeCache},
+			doer:      func() (httpDoer, error) { return &fakeHTTPDoer{}, nil },
+			download:  func(client httpDoer, path string, w io.Writer) error { return nil },
+			want:      nil,
+		},
+	}
+	for _, tt := range tests {
+		downloadFile = tt.download
+		connectWithCert = tt.doer
+		got := tt.installer.retrieveFile(tt.fileName, tt.filePath)
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: retrieveFile() got: %v, want: %v", tt.desc, got, tt.want)
+		}
+	}
+	// Cleanup
+	if err := os.RemoveAll(fakeCache); err != nil {
+		t.Errorf(`cleanup of %q returned %v`, fakeCache, err)
 	}
 }
 
