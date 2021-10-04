@@ -62,6 +62,7 @@ type distribution struct {
 	seedServer  string // If set, a seed is obtained from here.
 	seedFile    string // This file is hashed when obtainng a seed.
 	seedDest    string // The relative path where the seed should be written.
+	ffuDest     string // The relative path where SFU files will be stored.
 	imageServer string // The base image is obtained here.
 	images      map[string]string
 	ffus        map[string]string // Contains SFU manifests names.
@@ -254,6 +255,11 @@ func (c *Configuration) UpdateDevices(newDevices []string) {
 // FFU returns whether or not to place the SFU files after provisioning.
 func (c *Configuration) FFU() bool {
 	return c.ffu
+}
+
+// FFUDest returns the relative path where the SFU files should be written.
+func (c *Configuration) FFUDest() string {
+	return c.distro.ffuDest
 }
 
 // FFUManifest returns the filename of the SFU manifest file for this configuration.

@@ -57,6 +57,7 @@ type fakeConfig struct {
 	seedFile    string
 	seedServer  string
 	track       string
+	ffuDest     string
 	ffuPath     string
 	ffuManifest string
 }
@@ -103,6 +104,10 @@ func (f *fakeConfig) UpdateOnly() bool {
 
 func (f *fakeConfig) FFU() bool {
 	return f.ffu
+}
+
+func (f *fakeConfig) FFUDest() string {
+	return f.ffuDest
 }
 
 func (f *fakeConfig) FFUManifest() string {

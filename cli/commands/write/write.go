@@ -432,11 +432,11 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
 		}
 		if c.ffu {
-			console.Printf("Download SFU Files...")
+			console.Printf("Downloading SFU Files...")
 			if err := i.DownloadSFU(); err != nil {
 				return fmt.Errorf("%w: %v", errDownload, err)
 			}
-			console.Printf("Copying SFU Files to %s...", device.FriendlyName())
+			console.Printf("\nCopying SFU Files to %s...", device.FriendlyName())
 			if err := i.PlaceSFU(device); err != nil {
 				return fmt.Errorf("%w: %v", errCopy, err)
 			}

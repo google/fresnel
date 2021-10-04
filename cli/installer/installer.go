@@ -112,6 +112,7 @@ type Configuration interface {
 	ImageFile() string
 	Elevated() bool
 	FFU() bool
+	FFUDest() string
 	FFUManifest() string
 	FFUPath() string
 	PowerOff() bool
@@ -315,7 +316,7 @@ func download(client httpDoer, path string, w io.Writer) error {
 
 	// Provide updates during the download.
 	fileName := regExFileName.FindString(path)
-	op := "Download of " + fileName
+	op := "\nDownload of " + fileName
 	r := console.ProgressReader(resp.Body, op, resp.ContentLength)
 	if _, err := io.Copy(w, r); err != nil {
 		return fmt.Errorf("failed to write body of %q, %v: %w", path, err, errIO)
@@ -438,7 +439,6 @@ func readManifest(path string) ([]SFUManifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w failed to read file: %v", errFile, err)
 	}
-	console.Printf("Opened sfu manifest %s", path)
 	if err := json.Unmarshal(manifest, &sfus); err != nil {
 		return nil, fmt.Errorf("%w: %v", errUnmarshal, err)
 	}
@@ -487,14 +487,20 @@ func (i *Installer) PlaceSFU(d Device) error {
 	if err != nil {
 		return fmt.Errorf("getManifest() returned: %w: %v", errManifest, err)
 	}
-	for _, sfu := range sfus {
-		sfu := sfu
-		func() error{
+	for ind, sfu := range sfus {
+		// This is done as a separate function call to handle closing
+		// the files through the defer at the end of each iteration
+		// of the loop instead of waiting until the end of the function.
+		func() error {
 			path := filepath.Join(i.cache, sfu.Filename)
-			newPath := filepath.Join(p.MountPoint(), sfu.Filename)
+			newPath := filepath.Join(p.MountPoint(), i.config.FFUDest(), sfu.Filename)
 			// Add colon for windows paths if its a drive root.
 			if runtime.GOOS == "windows" && len(p.MountPoint()) < 2 {
-				newPath = filepath.Join(fmt.Sprintf("%s:", p.MountPoint()), sfu.Filename)
+				newPath = filepath.Join(fmt.Sprintf("%s:", p.MountPoint()), i.config.FFUDest(), sfu.Filename)
+			}
+			console.Printf("Copying SFU %d of %d...", ind+1, len(sfus))
+			if err := os.MkdirAll(filepath.Dir(newPath), 0644); err != nil {
+				return fmt.Errorf("failed to create path: %v", err)
 			}
 			source, err := os.Open(path)
 			if err != nil {
@@ -511,7 +517,7 @@ func (i *Installer) PlaceSFU(d Device) error {
 				return fmt.Errorf("failed to copy file to %s: %v", newPath, err)
 			}
 			console.Printf("Copied %d bytes", cBytes)
-		return nil
+			return nil
 		}()
 	}
 	return nil
