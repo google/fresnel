@@ -57,15 +57,17 @@ const (
 // required to obtain the resources required to install it.
 type distribution struct {
 	os          OperatingSystem
-	name        string // Friendly name: e.g. Corp Windows.
-	label       string // If set, is used to set partition labels.
-	seedServer  string // If set, a seed is obtained from here.
-	seedFile    string // This file is hashed when obtainng a seed.
-	seedDest    string // The relative path where the seed should be written.
-	ffuDest     string // The relative path where SFU files will be stored.
+	confStore   string // The relative path where configs are located.
+	sfuDest     string // The relative path where SFU files will be stored.
 	imageServer string // The base image is obtained here.
+	label       string // If set, is used to set partition labels.
+	name        string // Friendly name: e.g. Corp Windows.
+	seedDest    string // The relative path where the seed should be written.
+	seedFile    string // This file is hashed when obtainng a seed.
+	seedServer  string // If set, a seed is obtained from here.
 	images      map[string]string
-	ffus        map[string]string // Contains SFU manifests names.
+	sfus        map[string]string // Contains SFU manifests names.
+	configs     map[string]string // Contains config file names.
 }
 
 // Configuration represents the state of all flags and selections provided
@@ -88,11 +90,11 @@ type Configuration struct {
 func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
 	// Create a partial config using known good values.
 	conf := &Configuration{
-		cleanup:  cleanup,
-		warning:  warning,
-		ffu:      ffu,
-		eject:    eject,
-		update:   update,
+		cleanup: cleanup,
+		warning: warning,
+		ffu:     ffu,
+		eject:   eject,
+		update:  update,
 	}
 	if len(devices) > 0 {
 		if err := conf.addDeviceList(devices); err != nil {
@@ -257,20 +259,30 @@ func (c *Configuration) FFU() bool {
 	return c.ffu
 }
 
-// FFUDest returns the relative path where the SFU files should be written.
-func (c *Configuration) FFUDest() string {
-	return c.distro.ffuDest
+// SFUDest returns the relative path where the SFU files should be written.
+func (c *Configuration) SFUDest() string {
+	return c.distro.sfuDest
 }
 
-// FFUManifest returns the filename of the SFU manifest file for this configuration.
-func (c *Configuration) FFUManifest() string {
+// SFUManifest returns the filename of the SFU manifest file for this configuration.
+func (c *Configuration) SFUManifest() string {
 	// Return the filename only.
-	return filepath.Base(c.distro.ffus[c.track])
+	return filepath.Base(c.distro.sfus[c.track])
 }
 
-// FFUPath returns the path to the SFU manifest.
-func (c *Configuration) FFUPath() string {
+// SFUPath returns the path to the SFU manifest.
+func (c *Configuration) SFUPath() string {
 	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.name, c.track)
+}
+
+// FileName returns the name of the config file.
+func (c *Configuration) FileName() string {
+	return c.distro.configs[c.track]
+}
+
+// Path returns the path to the config.
+func (c *Configuration) Path() string {
+	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.track])
 }
 
 // PowerOff returns whether or not devices should be powered off after write

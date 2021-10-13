@@ -57,9 +57,11 @@ type fakeConfig struct {
 	seedFile    string
 	seedServer  string
 	track       string
-	ffuDest     string
-	ffuPath     string
-	ffuManifest string
+	sfuDest     string
+	sfuPath     string
+	sfuManifest string
+	fileName    string
+	path        string
 }
 
 func (f *fakeConfig) Dismount() bool {
@@ -106,16 +108,24 @@ func (f *fakeConfig) FFU() bool {
 	return f.ffu
 }
 
-func (f *fakeConfig) FFUDest() string {
-	return f.ffuDest
+func (f *fakeConfig) SFUDest() string {
+	return f.sfuDest
 }
 
-func (f *fakeConfig) FFUManifest() string {
-	return f.ffuManifest
+func (f *fakeConfig) SFUManifest() string {
+	return f.sfuManifest
 }
 
-func (f *fakeConfig) FFUPath() string {
-	return f.ffuPath
+func (f *fakeConfig) SFUPath() string {
+	return f.sfuPath
+}
+
+func (f *fakeConfig) FileName() string {
+	return f.fileName
+}
+
+func (f *fakeConfig) Path() string {
+	return f.path
 }
 
 func TestNew(t *testing.T) {
@@ -233,30 +243,56 @@ func TestRetrieve(t *testing.T) {
 			installer: &Installer{cache: fakeCache, config: &fakeConfig{
 				image:     `https://foo.bar.com/test_installer.img`,
 				imageFile: `test_installer.img`,
-				ffuPath:   ``,
+				sfuPath:   ``,
 				ffu:       true,
 			}},
-			want: errConfig,
+			want: errSFUPath,
+		},
+		{
+			desc: "missing yaml config",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				image:       `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				sfuPath:     `https://foo.bar.com/once/OS/stable/`,
+				ffu:         true,
+				sfuManifest: "manifest.json",
+				fileName:    "",
+				path:        "",
+			}},
+			want: errConfName,
+		},
+		{
+			desc: "missing yaml path",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				image:       `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				sfuPath:     `https://foo.bar.com/once/OS/stable/`,
+				ffu:         true,
+				sfuManifest: "manifest.json",
+				fileName:    "conf.yaml",
+				path:        "",
+			}},
+			want: errConfPath,
 		},
 		{
 			desc: "missing ffu manifest",
 			installer: &Installer{cache: fakeCache, config: &fakeConfig{
 				image:       `https://foo.bar.com/test_installer.img`,
 				imageFile:   `test_installer.img`,
-				ffuPath:     `https://foo.bar.com/once/OS/stable/`,
+				sfuPath:     `https://foo.bar.com/once/OS/stable/`,
 				ffu:         true,
-				ffuManifest: "",
+				sfuManifest: "",
 			}},
-			want: errConfig,
+			want: errSFUManifest,
 		},
 		{
 			desc: "missing cache",
 			installer: &Installer{config: &fakeConfig{
 				image:       `https://foo.bar.com/test_installer.img`,
 				imageFile:   `test_installer.img`,
-				ffuPath:     `https://foo.bar.com/once/OS/stable/`,
+				sfuPath:     `https://foo.bar.com/once/OS/stable/`,
 				ffu:         true,
-				ffuManifest: "manifest.json",
+				sfuManifest: "manifest.json",
 			}},
 			want: errCache,
 		},
@@ -265,9 +301,11 @@ func TestRetrieve(t *testing.T) {
 			installer: &Installer{cache: fakeCache, config: &fakeConfig{
 				image:       `https://foo.bar.com/test_installer.img`,
 				imageFile:   `test_installer.img`,
-				ffuPath:     `https://foo.bar.com/once/OS/stable/`,
+				sfuPath:     `https://foo.bar.com/once/OS/stable/`,
 				ffu:         true,
-				ffuManifest: "manifest.json",
+				sfuManifest: "manifest.json",
+				path:        "https://foo.bar.com/told/conf.yaml",
+				fileName:    "conf.yaml",
 			}},
 			download: func(client httpDoer, path string, w io.Writer) error { return nil },
 			want:     nil,
@@ -1240,8 +1278,8 @@ func TestDownloadSFU(t *testing.T) {
 	}
 	c := &fakeConfig{
 		track:       "stable",
-		ffuPath:     "https://www.somebody.com/once/windows/stable/",
-		ffuManifest: "manifest.json",
+		sfuPath:     "https://www.somebody.com/once/windows/stable/",
+		sfuManifest: "manifest.json",
 	}
 	tests := []struct {
 		desc         string
@@ -1289,18 +1327,81 @@ func TestDownloadSFU(t *testing.T) {
 	}
 }
 
-// createFakeSFU is used to create a set of fake SFU files.
-func createFakeSFU(fakeCache string) error {
+// createFakeFiles is used to create a set of fake SFU and conf files.
+func createFakeFiles(fakeCache, yamlName string) error {
 	sfus := fakeReadManifest()
 	for _, sfu := range sfus {
 		path := filepath.Join(fakeCache, sfu.Filename)
 		f, err := os.Create(path)
 		if err != nil {
-			return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", fakeCache, sfu.Filename, errFile, err)
+			return fmt.Errorf("os.Create(%q) returned %w: %v", path, errFile, err)
 		}
 		defer f.Close()
 	}
+	path := filepath.Join(fakeCache, yamlName)
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("os.Create(%q) returned %w: %v", path, errFile, err)
+	}
+	defer f.Close()
 	return nil
+}
+
+func TestFileCopy(t *testing.T) {
+	// Setup a temp folder.
+	fakeCache, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("ioutil.TempDir('', '') returned %v", err)
+	}
+	if err := createFakeFiles(fakeCache, "config.yaml"); err != nil {
+		t.Fatalf("createFakeFiles() failed: %v", err)
+	}
+	// Temp folders representing file system contents.
+	mount, _, err := fakeFileSystems()
+	if err != nil {
+		t.Fatalf("fakeFileSystems() returned %v", err)
+	}
+	defer os.RemoveAll(mount)
+	tests := []struct {
+		desc  string
+		cache string
+		file  string
+		dest  string
+		part  partition
+		want  error
+	}{
+		{
+			desc:  "successful copy",
+			cache: fakeCache,
+			file:  "config.yaml",
+			dest:  `some/dirs`,
+			part:  &fakePartition{mount: mount},
+			want:  nil,
+		},
+		{
+			desc:  "bad path",
+			cache: "",
+			file:  "config.yaml",
+			dest:  "",
+			part:  &fakePartition{mount: mount},
+			want:  errPath,
+		},
+		{
+			desc:  "empty file",
+			cache: fakeCache,
+			file:  "",
+			dest:  "",
+			part:  &fakePartition{mount: mount},
+			want:  errFile,
+		},
+	}
+	for _, tt := range tests {
+
+		got := fileCopy(tt.file, tt.dest, tt.cache, tt.part)
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: fileCopy() got: %v, want: %v", tt.desc, got, tt.want)
+		}
+	}
 }
 
 func TestPlaceSFU(t *testing.T) {
@@ -1309,7 +1410,8 @@ func TestPlaceSFU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ioutil.TempDir('', '') returned %v", err)
 	}
-	if err := createFakeSFU(fakeCache); err != nil {
+	yamlName := "conf.yaml"
+	if err := createFakeFiles(fakeCache, yamlName); err != nil {
 		t.Fatalf("createFakeSFU(%s) returned: %v", fakeCache, err)
 	}
 
@@ -1322,7 +1424,8 @@ func TestPlaceSFU(t *testing.T) {
 
 	c := &fakeConfig{
 		track:       "stable",
-		ffuManifest: "manifest.json",
+		sfuManifest: "manifest.json",
+		fileName:    yamlName,
 	}
 	tests := []struct {
 		desc         string

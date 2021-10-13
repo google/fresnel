@@ -59,12 +59,16 @@ var (
 	// Wrapped errors for testing.
 	errCache       = errors.New("missing cache")
 	errConfig      = errors.New("invalid config")
+	errConfName    = errors.New("missing configuration file name")
+	errConfPath    = errors.New("missing configuration file path")
 	errConnect     = errors.New("connect error")
 	errDownload    = errors.New("download error")
 	errDevice      = errors.New("device error")
 	errElevation   = errors.New("elevation is required for this operation")
 	errEmpty       = errors.New("iso is empty")
 	errEmptyUser   = errors.New("could not determine username")
+	errSFUManifest = errors.New("missing sfu manifest")
+	errSFUPath     = errors.New("sfu path empty")
 	errFile        = errors.New("file error")
 	errFinalize    = errors.New("finalize error")
 	errFormat      = errors.New("format error")
@@ -87,6 +91,7 @@ var (
 	errUnsupported = errors.New("unsupported")
 	errUser        = errors.New("user detection error")
 	errWipe        = errors.New("device wipe error")
+	errYAML        = errors.New("yaml retrieval error")
 
 	// ErrLabel is made public to that callers can warn on mismatches.
 	ErrLabel = errors.New(`label error`)
@@ -112,14 +117,16 @@ type Configuration interface {
 	ImageFile() string
 	Elevated() bool
 	FFU() bool
-	FFUDest() string
-	FFUManifest() string
-	FFUPath() string
+	SFUManifest() string
+	SFUPath() string
 	PowerOff() bool
 	SeedDest() string
 	SeedFile() string
 	SeedServer() string
+	SFUDest() string
 	UpdateOnly() bool
+	FileName() string
+	Path() string
 }
 
 // Device represents storage.Device.
@@ -269,20 +276,34 @@ func (i *Installer) Retrieve() (err error) {
 		return i.retrieveFile(i.config.ImageFile(), i.config.Image())
 	}
 
-	// Check FFU Path configuration
-	if i.config.FFUPath() == "" {
-		return fmt.Errorf("missing FFU path: %w", errConfig)
+	// Check FFU Path configuration.
+	if i.config.SFUPath() == "" {
+		return errSFUPath
 	}
 
-	// Check FFU Manifest configuration
-	if i.config.FFUManifest() == "" {
-		return fmt.Errorf("missing FFU manifest: %w", errConfig)
+	// Check FFU Manifest configuration.
+	if i.config.SFUManifest() == "" {
+		return errSFUManifest
+	}
+
+	// Check for missing conf file name.
+	if i.config.FileName() == "" {
+		return errConfName
+	}
+
+	// Check conf path configuration.
+	if i.config.Path() == "" {
+		return errConfPath
+	}
+
+	if err := i.retrieveFile(i.config.FileName(), i.config.Path()); err != nil {
+		return fmt.Errorf("%w: %v", errYAML, err)
 	}
 
 	if err := i.retrieveFile(i.config.ImageFile(), i.config.Image()); err != nil {
 		return fmt.Errorf("%w: %v", errImage, err)
 	}
-	return i.retrieveFile(i.config.FFUManifest(), fmt.Sprintf("%s/%s", i.config.FFUPath(), i.config.FFUManifest()))
+	return i.retrieveFile(i.config.SFUManifest(), fmt.Sprintf("%s/%s", i.config.SFUPath(), i.config.SFUManifest()))
 }
 
 // download obtains the installer using the provided client and writes it
@@ -450,7 +471,7 @@ func (i *Installer) DownloadSFU() error {
 	if i.cache == "" {
 		return fmt.Errorf("missing cache location: %w", errCache)
 	}
-	sfus, err := getManifest(filepath.Join(i.cache, i.config.FFUManifest()))
+	sfus, err := getManifest(filepath.Join(i.cache, i.config.SFUManifest()))
 	if err != nil {
 		return fmt.Errorf("readManifest() %w: %v", errManifest, err)
 	}
@@ -463,11 +484,11 @@ func (i *Installer) DownloadSFU() error {
 		path := filepath.Join(i.cache, sfu.Filename)
 		f, err := os.Create(path)
 		if err != nil {
-			return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", i.cache, i.config.FFUManifest(), errFile, err)
+			return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", i.cache, i.config.SFUManifest(), errFile, err)
 		}
 		defer f.Close()
 
-		if err := downloadFile(client, fmt.Sprintf(`%s/%s`, i.config.FFUPath(), sfu.Filename), f); err != nil {
+		if err := downloadFile(client, fmt.Sprintf(`%s/%s`, i.config.SFUPath(), sfu.Filename), f); err != nil {
 			return fmt.Errorf("DownloadSFU() returned %w: %v", errDownload, err)
 		}
 
@@ -475,7 +496,8 @@ func (i *Installer) DownloadSFU() error {
 	return nil
 }
 
-// PlaceSFU copies SFU files onto provisioned media from the local cache.
+// PlaceSFU copies SFU files and config files onto provisioned media
+// from the local cache.
 func (i *Installer) PlaceSFU(d Device) error {
 	// Find a compatible partition to write the FFU to.
 	logger.V(2).Infof("Searching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32)
@@ -483,43 +505,50 @@ func (i *Installer) PlaceSFU(d Device) error {
 	if err != nil {
 		return fmt.Errorf("SelectPartition(%q, %q, %q) returned %w: %v", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32, errPartition, err)
 	}
-	sfus, err := getManifest(filepath.Join(i.cache, i.config.FFUManifest()))
+	sfus, err := getManifest(filepath.Join(i.cache, i.config.SFUManifest()))
 	if err != nil {
 		return fmt.Errorf("getManifest() returned: %w: %v", errManifest, err)
 	}
+	// Copy SFU files.
 	for ind, sfu := range sfus {
-		// This is done as a separate function call to handle closing
-		// the files through the defer at the end of each iteration
-		// of the loop instead of waiting until the end of the function.
-		func() error {
-			path := filepath.Join(i.cache, sfu.Filename)
-			newPath := filepath.Join(p.MountPoint(), i.config.FFUDest(), sfu.Filename)
-			// Add colon for windows paths if its a drive root.
-			if runtime.GOOS == "windows" && len(p.MountPoint()) < 2 {
-				newPath = filepath.Join(fmt.Sprintf("%s:", p.MountPoint()), i.config.FFUDest(), sfu.Filename)
-			}
-			console.Printf("Copying SFU %d of %d...", ind+1, len(sfus))
-			if err := os.MkdirAll(filepath.Dir(newPath), 0644); err != nil {
-				return fmt.Errorf("failed to create path: %v", err)
-			}
-			source, err := os.Open(path)
-			if err != nil {
-				return fmt.Errorf("%w: couldn't open file(%s) from cache: %v", errPath, path, err)
-			}
-			defer source.Close()
-			destination, err := os.Create(newPath)
-			if err != nil {
-				return fmt.Errorf("%w: couldn't create target file(%s): %v", errFile, path, err)
-			}
-			defer destination.Close()
-			cBytes, err := io.Copy(destination, source)
-			if err != nil {
-				return fmt.Errorf("failed to copy file to %s: %v", newPath, err)
-			}
-			console.Printf("Copied %d bytes", cBytes)
-			return nil
-		}()
+		console.Printf("Copying SFU %d of %d...", ind+1, len(sfus))
+		if err := fileCopy(sfu.Filename, i.config.SFUDest(), i.cache, p); err != nil {
+			return fmt.Errorf("fileCopy() failed for %s to %s: %v", sfu.Filename, i.config.SFUDest(), err)
+		}
 	}
+	// Copy config.
+	console.Printf("Copying %s", i.config.FileName())
+	if err := fileCopy(i.config.FileName(), i.config.SFUDest(), i.cache, p); err != nil {
+		return fmt.Errorf("fileCopy() failed for %s to %s: %v", i.config.FileName(), i.config.SFUDest(), err)
+	}
+	return nil
+}
+
+func fileCopy(srcFile, dest, cache string, p partition) error {
+	path := filepath.Join(cache, srcFile)
+	newPath := filepath.Join(p.MountPoint(), dest, srcFile)
+	// Add colon for windows paths if its a drive root.
+	if runtime.GOOS == "windows" && len(p.MountPoint()) < 2 {
+		newPath = filepath.Join(fmt.Sprintf("%s:", p.MountPoint()), dest, srcFile)
+	}
+	if err := os.MkdirAll(filepath.Dir(newPath), 0744); err != nil {
+		return fmt.Errorf("failed to create path: %v", err)
+	}
+	source, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("%w: couldn't open file(%s) from cache: %v", errPath, path, err)
+	}
+	defer source.Close()
+	destination, err := os.Create(newPath)
+	if err != nil {
+		return fmt.Errorf("%w: couldn't create target file(%s): %v", errFile, path, err)
+	}
+	defer destination.Close()
+	cBytes, err := io.Copy(destination, source)
+	if err != nil {
+		return fmt.Errorf("failed to copy file to %s: %v", newPath, err)
+	}
+	console.Printf("Copied %d bytes", cBytes)
 	return nil
 }
 

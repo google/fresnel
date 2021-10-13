@@ -470,7 +470,7 @@ func TestImageFile(t *testing.T) {
 	}
 }
 
-func TestFFUPath(t *testing.T) {
+func TestSFUPath(t *testing.T) {
 	track := `default`
 	distro := distribution{
 		imageServer: `https://foo.bar.com`,
@@ -481,25 +481,25 @@ func TestFFUPath(t *testing.T) {
 	}
 	want := "https://foo.bar.com/nombre/default"
 	c := Configuration{track: track, distro: &distro}
-	if got := c.FFUPath(); got != want {
-		t.Errorf("FFUPath() got: %q, want: %q", got, want)
+	if got := c.SFUPath(); got != want {
+		t.Errorf("SFUPath() got: %q, want: %q", got, want)
 	}
 }
 
-func TestFFUManifest(t *testing.T) {
+func TestSFUManifest(t *testing.T) {
 	tests := []struct {
 		desc string
-		ffus map[string]string
+		sfus map[string]string
 		want string
 	}{
 		{
 			desc: "json",
-			ffus: map[string]string{"default": "manifest.json"},
+			sfus: map[string]string{"default": "manifest.json"},
 			want: "manifest.json",
 		},
 		{
 			desc: "nested json",
-			ffus: map[string]string{"default": "nested/manifest.json"},
+			sfus: map[string]string{"default": "nested/manifest.json"},
 			want: "manifest.json",
 		},
 	}
@@ -507,13 +507,43 @@ func TestFFUManifest(t *testing.T) {
 		c := Configuration{
 			track: "default",
 			distro: &distribution{
-				ffus: tt.ffus,
+				sfus: tt.sfus,
 			},
 		}
-		got := c.FFUManifest()
+		got := c.SFUManifest()
 		if got != tt.want {
-			t.Errorf("%s: FFUManifest() got: %q, want: %q", tt.desc, got, tt.want)
+			t.Errorf("%s: SFUManifest() got: %q, want: %q", tt.desc, got, tt.want)
 		}
+	}
+}
+
+func TestFileName(t *testing.T) {
+	track := `default`
+	distro := distribution{
+		configs: map[string]string{
+			track: "conf.yaml",
+		},
+	}
+	want := "conf.yaml"
+	c := Configuration{track: track, distro: &distro}
+	if got := c.FileName(); got != want {
+		t.Errorf("FileName() got: %q, want: %q", got, want)
+	}
+}
+
+func TestPath(t *testing.T) {
+	track := `default`
+	distro := distribution{
+		imageServer: `https://foo.bar.com`,
+		confStore:   `configs/yaml`,
+		configs: map[string]string{
+			track: "conf.yaml",
+		},
+	}
+	want := "https://foo.bar.com/configs/yaml/conf.yaml"
+	c := Configuration{track: track, distro: &distro}
+	if got := c.Path(); got != want {
+		t.Errorf("Path() got: %q, want: %q", got, want)
 	}
 }
 
