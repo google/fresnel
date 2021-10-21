@@ -521,6 +521,11 @@ func (i *Installer) PlaceSFU(d Device) error {
 	if err := fileCopy(i.config.FileName(), i.config.SFUDest(), i.cache, p); err != nil {
 		return fmt.Errorf("fileCopy() failed for %s to %s: %v", i.config.FileName(), i.config.SFUDest(), err)
 	}
+
+	// Rename config to always have the same file name.
+	if err := os.Rename(filepath.Join(i.config.SFUDest(), i.config.FileName()), filepath.Join(i.config.SFUDest(), "startimage.yaml")); err != nil {
+		return fmt.Errorf("os.Rename(startimage.yaml): %w", err)
+	}
 	return nil
 }
 
