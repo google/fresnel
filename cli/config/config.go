@@ -29,8 +29,10 @@ var (
 	currentUser = user.Current
 
 	// Wrapped errors for testing.
+	errConfTrack = errors.New("configuration track error")
 	errDistro    = errors.New(`distribution selection error`)
 	errDevice    = errors.New(`device error`)
+	errFFUTrack  = errors.New("ffu track error")
 	errElevation = errors.New(`elevation detection error`)
 	errInput     = errors.New("invalid or missing input")
 	errSeed      = errors.New("seed error")
@@ -74,21 +76,23 @@ type distribution struct {
 // Configuration represents the state of all flags and selections provided
 // by the user when the binary is invoked.
 type Configuration struct {
-	cleanup  bool
-	devices  []string
-	distro   *distribution
-	dismount bool
-	ffu      bool
-	update   bool
-	eject    bool
-	elevated bool // If the user is running as root.
-	track    string
-	warning  bool
+	cleanup   bool
+	devices   []string
+	distro    *distribution
+	dismount  bool
+	ffu       bool
+	update    bool
+	eject     bool
+	elevated  bool // If the user is running as root.
+	track     string
+	ffuTrack  string
+	confTrack string
+	warning   bool
 }
 
 // New generates a new configuration from flags passed on the command line.
 // It performs sanity checks on those parameters.
-func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
+func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track, confTrack, ffuTrack, seedServer string) (*Configuration, error) {
 	// Create a partial config using known good values.
 	conf := &Configuration{
 		cleanup: cleanup,
@@ -106,9 +110,17 @@ func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track,
 	if err := conf.addDistro(os); err != nil {
 		return nil, fmt.Errorf("addDistro(%q) returned %v", os, err)
 	}
-	// Sanity check the image track and add it to the config.
+	// Sanity check the image, ffu, and configuration tracks and add them to the config.
 	if err := conf.addTrack(track); err != nil {
 		return nil, err
+	}
+	if ffu {
+		if err := conf.addFFUTrack(ffuTrack); err != nil {
+			return nil, err
+		}
+		if err := conf.addConfTrack(confTrack); err != nil {
+			return nil, err
+		}
 	}
 	// Sanity check the seed server and override if instructed to do so by flag.
 	if err := conf.addSeedServer(seedServer); err != nil {
@@ -187,7 +199,7 @@ func (c *Configuration) addSeedServer(fqdn string) error {
 }
 
 func (c *Configuration) addTrack(track string) error {
-	// Check that a default image is avaialble in the distro.
+	// Check that a default image is available in the distro.
 	if _, ok := c.distro.images["default"]; !ok {
 		return fmt.Errorf("%w: a default image is not available", errInput)
 	}
@@ -207,6 +219,54 @@ func (c *Configuration) addTrack(track string) error {
 	}
 	// Set the chosen, sanity checked image.
 	c.track = track
+	return nil
+}
+
+func (c *Configuration) addFFUTrack(track string) error {
+	// Check that a default ffu is available in the distro.
+	if _, ok := c.distro.sfus["default"]; !ok {
+		return fmt.Errorf("%w: a default ffu is not available", errInput)
+	}
+	// If no track was provided, the existing default is used.
+	if track == "" {
+		c.ffuTrack = "default"
+		return nil
+	}
+	// Sanity check the specified track against the available
+	// options for the distro.
+	if _, ok := c.distro.sfus[track]; !ok {
+		var opts []string
+		for o := range c.distro.sfus {
+			opts = append(opts, o)
+		}
+		return fmt.Errorf("%w: invalid ffu track requested: %q is not in %v", errFFUTrack, track, opts)
+	}
+	// Set the chosen, sanity checked ffu.
+	c.ffuTrack = track
+	return nil
+}
+
+func (c *Configuration) addConfTrack(track string) error {
+	// Check that a default configuration is available in the distro.
+	if _, ok := c.distro.configs["default"]; !ok {
+		return fmt.Errorf("%w: a default configuration is not available", errInput)
+	}
+	// If no track was provided, the existing default is used.
+	if track == "" {
+		c.confTrack = "default"
+		return nil
+	}
+	// Sanity check the specified track against the available
+	// options for the distro.
+	if _, ok := c.distro.configs[track]; !ok {
+		var opts []string
+		for o := range c.distro.configs {
+			opts = append(opts, o)
+		}
+		return fmt.Errorf("%w: invalid configuration track requested: %q is not in %v", errConfTrack, track, opts)
+	}
+	// Set the chosen, sanity checked configuration.
+	c.confTrack = track
 	return nil
 }
 
@@ -268,12 +328,12 @@ func (c *Configuration) SFUDest() string {
 // SFUManifest returns the filename of the SFU manifest file for this configuration.
 func (c *Configuration) SFUManifest() string {
 	// Return the filename only.
-	return filepath.Base(c.distro.sfus[c.track])
+	return filepath.Base(c.distro.sfus[c.ffuTrack])
 }
 
 // SFUPath returns the path to the SFU manifest.
 func (c *Configuration) SFUPath() string {
-	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.label, c.track)
+	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.label, c.ffuTrack)
 }
 
 // ConfFile returns the final name of the configuration file.
@@ -283,12 +343,12 @@ func (c *Configuration) ConfFile() string {
 
 // FileName returns the name of the config file.
 func (c *Configuration) FileName() string {
-	return c.distro.configs[c.track]
+	return c.distro.configs[c.confTrack]
 }
 
 // Path returns the path to the config.
 func (c *Configuration) Path() string {
-	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.track])
+	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.confTrack])
 }
 
 // PowerOff returns whether or not devices should be powered off after write

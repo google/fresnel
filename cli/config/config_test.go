@@ -30,6 +30,14 @@ var (
 			"default": "default_installer.img",
 			"stable":  "stable_installer.img",
 		},
+		configs: map[string]string{
+			"default": "default_config.yaml",
+			"stable":  "stable_config.yaml",
+		},
+		sfus: map[string]string{
+			"default": "default_manifest.json",
+			"stable":  "stable_manifest.json",
+		},
 	}
 )
 
@@ -81,9 +89,12 @@ func TestNew(t *testing.T) {
 	tests := []struct {
 		desc           string
 		fakeIsElevated func() (bool, error)
+		ffu            bool
 		devices        []string
 		os             string
 		track          string
+		confTrack      string
+		ffuTrack       string
 		seedServer     string
 		out            *Configuration
 		want           error
@@ -105,6 +116,24 @@ func TestNew(t *testing.T) {
 			os:      "windows",
 			track:   "foo",
 			want:    errTrack,
+		},
+		{
+			desc:           "bad conf track",
+			devices:        []string{"disk1"},
+			ffu:            true,
+			os:             "windows",
+			confTrack:      "foo",
+			fakeIsElevated: func() (bool, error) { return true, nil },
+			want:           errConfTrack,
+		},
+		{
+			desc:           "bad ffu track",
+			devices:        []string{"disk1"},
+			ffu:            true,
+			os:             "windows",
+			ffuTrack:       "foo",
+			fakeIsElevated: func() (bool, error) { return true, nil },
+			want:           errFFUTrack,
 		},
 		{
 			desc:       "bad seed server",
@@ -139,7 +168,7 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		IsElevatedCmd = tt.fakeIsElevated
-		c, got := New(false, false, false, false, false, tt.devices, tt.os, tt.track, tt.seedServer)
+		c, got := New(false, false, false, tt.ffu, false, tt.devices, tt.os, tt.track, tt.confTrack, tt.ffuTrack, tt.seedServer)
 		if got == tt.want {
 			continue
 		}
@@ -376,12 +405,136 @@ func TestAddTrack(t *testing.T) {
 	}
 }
 
+func TestAddConfTrack(t *testing.T) {
+	badDistro := distribution{
+		imageServer: imageServer,
+		images: map[string]string{
+			"stable": "stable_installer.img",
+		},
+		configs: map[string]string{
+			"stable": "stable_installer.yaml",
+		},
+	}
+
+	tests := []struct {
+		desc   string
+		track  string
+		distro distribution
+		out    Configuration
+		want   error
+	}{
+		{
+			desc:   "no default conf track",
+			distro: badDistro,
+			track:  "default",
+			out:    Configuration{distro: &badDistro},
+			want:   errInput,
+		},
+		{
+			desc:   "empty conf track",
+			distro: goodDistro,
+			out:    Configuration{distro: &goodDistro},
+			want:   nil,
+		},
+		{
+			desc:   "non-existent conf track",
+			track:  "foo",
+			distro: goodDistro,
+			out:    Configuration{distro: &goodDistro},
+			want:   errConfTrack,
+		},
+		{
+			desc:   "valid conf track",
+			track:  "stable",
+			distro: goodDistro,
+			out:    Configuration{distro: &goodDistro},
+			want:   nil,
+		},
+	}
+	for _, tt := range tests {
+		c := Configuration{distro: &tt.distro}
+		got := c.addConfTrack(tt.track)
+		if err := cmpConfig(c, tt.out); err != nil {
+			t.Errorf("%s: %v", tt.desc, err)
+		}
+		if got == tt.want {
+			continue
+		}
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: addConfTrack() got: '%v', want: '%v'", tt.desc, got, tt.want)
+		}
+	}
+}
+
 func TestDistro(t *testing.T) {
 	want := "test"
 	distro := distribution{name: want}
 	c := Configuration{distro: &distro}
 	if got := c.Distro(); got != want {
 		t.Errorf("Distro() got: %q, want: %q", got, want)
+	}
+}
+
+func TestAddFFUTrack(t *testing.T) {
+	badDistro := distribution{
+		imageServer: imageServer,
+		images: map[string]string{
+			"stable": "stable_installer.img",
+		},
+		configs: map[string]string{
+			"stable": "stable_config.yaml",
+		},
+		sfus: map[string]string{
+			"stable": "stable_manifest.json",
+		},
+	}
+
+	tests := []struct {
+		desc   string
+		track  string
+		distro distribution
+		out    Configuration
+		want   error
+	}{
+		{
+			desc:   "no default FFU track",
+			distro: badDistro,
+			out:    Configuration{distro: &badDistro},
+			want:   errInput,
+		},
+		{
+			desc:   "empty ffu track",
+			distro: goodDistro,
+			out:    Configuration{distro: &goodDistro},
+			want:   nil,
+		},
+		{
+			desc:   "non-existent ffu track",
+			track:  "foo",
+			distro: goodDistro,
+			out:    Configuration{distro: &goodDistro},
+			want:   errFFUTrack,
+		},
+		{
+			desc:   "valid ffu track",
+			track:  "stable",
+			distro: goodDistro,
+			out:    Configuration{distro: &goodDistro},
+			want:   nil,
+		},
+	}
+	for _, tt := range tests {
+		c := Configuration{distro: &tt.distro}
+		got := c.addFFUTrack(tt.track)
+		if err := cmpConfig(c, tt.out); err != nil {
+			t.Errorf("%s: %v", tt.desc, err)
+		}
+		if got == tt.want {
+			continue
+		}
+		if !errors.Is(got, tt.want) {
+			t.Errorf("%s: addFFUTrack() got: '%v', want: '%v'", tt.desc, got, tt.want)
+		}
 	}
 }
 
@@ -480,7 +633,7 @@ func TestSFUPath(t *testing.T) {
 		label: "nombre",
 	}
 	want := "https://foo.bar.com/nombre/default"
-	c := Configuration{track: track, distro: &distro}
+	c := Configuration{ffuTrack: track, distro: &distro}
 	if got := c.SFUPath(); got != want {
 		t.Errorf("SFUPath() got: %q, want: %q", got, want)
 	}
@@ -505,7 +658,7 @@ func TestSFUManifest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		c := Configuration{
-			track: "default",
+			ffuTrack: "default",
 			distro: &distribution{
 				sfus: tt.sfus,
 			},
@@ -525,7 +678,7 @@ func TestFileName(t *testing.T) {
 		},
 	}
 	want := "conf.yaml"
-	c := Configuration{track: track, distro: &distro}
+	c := Configuration{confTrack: track, distro: &distro}
 	if got := c.FileName(); got != want {
 		t.Errorf("FileName() got: %q, want: %q", got, want)
 	}
@@ -541,7 +694,7 @@ func TestPath(t *testing.T) {
 		},
 	}
 	want := "https://foo.bar.com/configs/yaml/conf.yaml"
-	c := Configuration{track: track, distro: &distro}
+	c := Configuration{confTrack: track, distro: &distro}
 	if got := c.Path(); got != want {
 		t.Errorf("Path() got: %q, want: %q", got, want)
 	}
