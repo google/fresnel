@@ -57,6 +57,7 @@ const (
 // required to obtain the resources required to install it.
 type distribution struct {
 	os          OperatingSystem
+	confFile    string // The final name of the config file.
 	confStore   string // The relative path where configs are located.
 	sfuDest     string // The relative path where SFU files will be stored.
 	imageServer string // The base image is obtained here.
@@ -273,6 +274,11 @@ func (c *Configuration) SFUManifest() string {
 // SFUPath returns the path to the SFU manifest.
 func (c *Configuration) SFUPath() string {
 	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.name, c.track)
+}
+
+// ConfFile returns the final name of the configuration file.
+func (c *Configuration) ConfFile() string {
+	return c.distro.confFile
 }
 
 // FileName returns the name of the config file.

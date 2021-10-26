@@ -50,6 +50,7 @@ type fakeConfig struct {
 	update   bool
 	err      error // the error returned when isElevated is called.
 
+	confFile    string
 	distroLabel string
 	image       string
 	imageFile   string
@@ -62,6 +63,10 @@ type fakeConfig struct {
 	sfuManifest string
 	fileName    string
 	path        string
+}
+
+func (f *fakeConfig) ConfFile() string {
+	return f.confFile
 }
 
 func (f *fakeConfig) Dismount() bool {
@@ -1412,7 +1417,7 @@ func TestPlaceSFU(t *testing.T) {
 	}
 	yamlName := "conf.yaml"
 	if err := createFakeFiles(fakeCache, yamlName); err != nil {
-		t.Fatalf("createFakeSFU(%s) returned: %v", fakeCache, err)
+		t.Fatalf("createFakeFiles(%s) returned: %v", fakeCache, err)
 	}
 
 	// Temp folders representing file system contents.
@@ -1426,6 +1431,7 @@ func TestPlaceSFU(t *testing.T) {
 		track:       "stable",
 		sfuManifest: "manifest.json",
 		fileName:    yamlName,
+		confFile:    "startimage.yaml",
 	}
 	tests := []struct {
 		desc         string
@@ -1457,6 +1463,22 @@ func TestPlaceSFU(t *testing.T) {
 			},
 			device: &fakeDevice{},
 			want:   errManifest,
+		},
+		{
+			desc: "rename error",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				track:       "stable",
+				sfuManifest: "manifest.json",
+				fileName:    yamlName,
+				confFile:    "startimage/.yaml",
+			}},
+			download:     func(client httpDoer, path string, w io.Writer) error { return nil },
+			fakeManifest: func(string) ([]SFUManifest, error) { return fakeReadManifest(), nil },
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{mount: mount, contents: contents}, nil
+			},
+			device: &fakeDevice{},
+			want:   errRename,
 		},
 		{
 			desc:         "partition select failure",

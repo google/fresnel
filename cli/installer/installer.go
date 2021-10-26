@@ -84,6 +84,7 @@ var (
 	errPost        = errors.New("http post error")
 	errPrepare     = errors.New("preparation error")
 	errProvision   = errors.New("provisioning error")
+	errRename      = errors.New("file rename error")
 	errResponse    = errors.New("requested boot image is not in allowlist")
 	errStatus      = errors.New("invalid status code")
 	errSeed        = errors.New("invalid seed response")
@@ -112,6 +113,7 @@ type httpDoer interface {
 
 // Configuration represents config.Configuration.
 type Configuration interface {
+	ConfFile() string
 	DistroLabel() string
 	Image() string
 	ImageFile() string
@@ -521,6 +523,15 @@ func (i *Installer) PlaceSFU(d Device) error {
 	if err := fileCopy(i.config.FileName(), i.config.SFUDest(), i.cache, p); err != nil {
 		return fmt.Errorf("fileCopy() failed for %s to %s: %v", i.config.FileName(), i.config.SFUDest(), err)
 	}
+
+	// Rename config to the YAML to have a consistent file name.
+	oldConf := filepath.Join(p.MountPoint(), i.config.SFUDest(), i.config.FileName())
+	newConf := filepath.Join(p.MountPoint(), i.config.SFUDest(), i.config.ConfFile())
+	console.Printf("\nRenaming %q to %q", oldConf, newConf)
+	if err := os.Rename(oldConf, newConf); err != nil {
+		return fmt.Errorf("%w: %v", errRename, err)
+	}
+
 	return nil
 }
 
