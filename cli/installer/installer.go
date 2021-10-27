@@ -504,7 +504,7 @@ func (i *Installer) DownloadSFU() error {
 // PlaceSFU also writes a datetime file to the provisioned media.
 func (i *Installer) PlaceSFU(d Device) error {
 	// Find a compatible partition to write the FFU to.
-	logger.V(2).Infof("Searching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32)
+	logger.V(2).Infof("\nSearching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32)
 	p, err := selectPart(d, minSFUPartSize, storage.FAT32)
 	if err != nil {
 		return fmt.Errorf("SelectPartition(%q, %q, %q) returned %w: %v", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32, errPartition, err)
