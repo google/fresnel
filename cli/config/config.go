@@ -273,7 +273,7 @@ func (c *Configuration) SFUManifest() string {
 
 // SFUPath returns the path to the SFU manifest.
 func (c *Configuration) SFUPath() string {
-	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.name, c.track)
+	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.label, c.track)
 }
 
 // ConfFile returns the final name of the configuration file.

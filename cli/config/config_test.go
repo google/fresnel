@@ -477,7 +477,7 @@ func TestSFUPath(t *testing.T) {
 		images: map[string]string{
 			track: "manifest.json",
 		},
-		name: "nombre",
+		label: "nombre",
 	}
 	want := "https://foo.bar.com/nombre/default"
 	c := Configuration{track: track, distro: &distro}
