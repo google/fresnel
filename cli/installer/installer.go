@@ -32,6 +32,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/fresnel/models"
@@ -498,8 +499,9 @@ func (i *Installer) DownloadSFU() error {
 	return nil
 }
 
-// PlaceSFU copies SFU files and config files onto provisioned media
-// from the local cache.
+// PlaceSFU copies and renames SFU files and config files onto
+// provisioned media from the local cache. For additional verification,
+// PlaceSFU also writes a datetime file to the provisioned media.
 func (i *Installer) PlaceSFU(d Device) error {
 	// Find a compatible partition to write the FFU to.
 	logger.V(2).Infof("Searching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32)
@@ -534,6 +536,14 @@ func (i *Installer) PlaceSFU(d Device) error {
 	console.Printf("\nRenaming %q to %q", oldConf, newConf)
 	if err := os.Rename(oldConf, newConf); err != nil {
 		return fmt.Errorf("%w: %v", errRename, err)
+	}
+
+	// Write a file named after the current date since SFU images do not use seed files.
+	dateFile := filepath.Join(mountPoint, i.config.SFUDest(), time.Now().Format("20060102"))
+	logger.V(2).Infof("Writing timestamp file: %q.", dateFile)
+	// Permissions = owner:read/write, group:read"
+	if err := ioutil.WriteFile(dateFile, nil, 0644); err != nil {
+		return fmt.Errorf("ioutil.WriteFile(%q) returned %v", dateFile, err)
 	}
 
 	return nil
