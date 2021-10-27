@@ -525,8 +525,12 @@ func (i *Installer) PlaceSFU(d Device) error {
 	}
 
 	// Rename config to the YAML to have a consistent file name.
-	oldConf := filepath.Join(p.MountPoint(), i.config.SFUDest(), i.config.FileName())
-	newConf := filepath.Join(p.MountPoint(), i.config.SFUDest(), i.config.ConfFile())
+	mountPoint := p.MountPoint()
+	if runtime.GOOS == "windows" && len(p.MountPoint()) < 2 {
+		mountPoint = fmt.Sprintf("%s:", p.MountPoint())
+	}
+	oldConf := filepath.Join(mountPoint, i.config.SFUDest(), i.config.FileName())
+	newConf := filepath.Join(mountPoint, i.config.SFUDest(), i.config.ConfFile())
 	console.Printf("\nRenaming %q to %q", oldConf, newConf)
 	if err := os.Rename(oldConf, newConf); err != nil {
 		return fmt.Errorf("%w: %v", errRename, err)
