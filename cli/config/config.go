@@ -345,9 +345,14 @@ func (c *Configuration) String() string {
   Track       : %q
   Image       : %q
   ImageFile   : %q
+
   SeedServer  : %q
   SeedFile    : %q
   SeedDest    : %q
+
+  SFUPath     : %q
+  SFUDest     : %q
+  SFUManifest : %q
 
   Targets     : %v
   PowerOff    : %t`,
@@ -363,6 +368,9 @@ func (c *Configuration) String() string {
 		c.SeedServer(),
 		c.SeedFile(),
 		c.SeedDest(),
+		c.SFUPath(),
+		c.SFUDest(),
+		c.SFUManifest(),
 		c.Devices(),
 		c.PowerOff())
 }
