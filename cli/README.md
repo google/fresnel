@@ -81,7 +81,7 @@ cli.exe list --maximum=64
 
 The write subcommand writes an operating system installer to storage media. The
 list of available operating system installers is configured by modifying the
-config package and its [deafults.go](config/defaults.go) file.
+config package and its [defaults.go](config/defaults.go) file.
 
 __**Usage Examples**__
 
