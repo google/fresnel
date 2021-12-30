@@ -6,6 +6,16 @@ The Fresnel CLI runs on a trusted machine that is authorized to build boot media
 for an operating system installer. It's primary purpose is to prepare storage
 media (USB or Removable Disk) that will install an operating system.
 
+## Getting Started
+
+Pre-compiled binaries are available as [release assets][https://github.com/google/fresnel/releases].
+
+Building Fresnel CLI manually:
+
+1. Clone the repository
+1. Install any missing imports with `go get -u`
+1. Run `go build C:\Path\to\fresnel\src\cli`
+
 ## Subcommands
 
 Subcommands are required in order to operate the CLI. A list of available
