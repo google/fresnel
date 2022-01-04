@@ -8,7 +8,8 @@ media (USB or Removable Disk) that will install an operating system.
 
 ## Getting Started
 
-Pre-compiled binaries are available as [release assets][https://github.com/google/fresnel/releases].
+Pre-compiled binaries are available as
+[release assets](https://github.com/google/fresnel/releases).
 
 Building Fresnel CLI manually:
 
