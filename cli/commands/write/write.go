@@ -80,7 +80,7 @@ func init() {
 }
 
 // writeCmd is the write subcommand to download and write the installer image
-// to avaialble storage devices.
+// to available storage devices.
 type writeCmd struct {
 	// name is the name of the write command.
 	name string
@@ -244,13 +244,13 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 	// Search related flags.
 	f.BoolVar(&c.listFixed, "show_fixed", false, "also consider fixed drives, cannot be combined with --all")
 	f.IntVar(&c.minSize, "minimum", minSize, "minimum size [in GB] of drives to consider as available")
-	f.IntVar(&c.maxSize, "maximum", 0, "maximum size [in GB] drives to consider as avaialble")
+	f.IntVar(&c.maxSize, "maximum", 0, "maximum size [in GB] drives to consider as available")
 
 	// Special case flag handling.
 
 	// The dismount flag is always defaulted to true on Linux as we don't want
 	// to leave temp mount folders behind. On Windows and Darwin it is generally
-	// expected that the device remain avaialble post-provioning.
+	// expected that the device remain available post-provioning.
 	d := c.dismount
 	if runtime.GOOS == "linux" {
 		d = true
