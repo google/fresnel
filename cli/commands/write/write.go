@@ -419,14 +419,14 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	}
 	// Prepare and provision devices. This step occurs once per device.
 	for _, device := range targets {
-		console.Printf("\nPreparing device %q...", device.Identifier())
-		logger.V(1).Infof("Preparing device %q...", device.Identifier())
+		console.Printf("\nPreparing device %q...", device.FriendlyName())
+		logger.V(1).Infof("Preparing device %q...", device.FriendlyName())
 		// Prepare the device.
 		if err := i.Prepare(device); err != nil {
 			return fmt.Errorf("%w: Prepare(%q) returned %v: ", errPrepare, device.FriendlyName(), err)
 		}
-		console.Printf("Provisioning device %q...", device.Identifier())
-		logger.V(1).Infof("Provisioning device %q...", device.Identifier())
+		console.Printf("Provisioning device %q...", device.FriendlyName())
+		logger.V(1).Infof("Provisioning device %q...", device.FriendlyName())
 		// Provision the device.
 		if err := i.Provision(device); err != nil {
 			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
