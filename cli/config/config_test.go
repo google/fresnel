@@ -31,6 +31,8 @@ var (
 			"stable":  "stable_installer.img",
 		},
 	}
+
+	distroDefaults = distributions
 )
 
 // cmpConfig is a custom comparer for the Configuration struct. We use a custom
@@ -218,6 +220,7 @@ func TestAddDistro(t *testing.T) {
 			t.Errorf("%s: addDistro() got: '%v', want: '%v'", tt.desc, got, tt.want)
 		}
 	}
+	distributions = distroDefaults // reset defaults for other tests
 }
 
 func TestAddDeviceList(t *testing.T) {
