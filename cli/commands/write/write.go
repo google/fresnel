@@ -109,10 +109,15 @@ type writeCmd struct {
 	// after provisioning is complete. Defaults to false.
 	ffu bool
 
-	// track specifies the distribution track or variant of the distribution
+	// track specifies the distribution track or variant of the image distribution
 	// to be provisioned.
 	// Examples: 'stable', 'testing', 'unstable', 'test'.
 	track string
+
+	// conftrack specifies the distribution track or variant of the configuration file
+	// to be provisioned.
+	// Examples: 'stable', 'testing', 'unstable', 'test'.
+	confTrack string
 
 	// seedServer permits overriding the default server used to obtain a seed
 	// for distributions that require them. If the chosen distribution does not
@@ -186,19 +191,20 @@ This operation requires elevated permissions such as 'sudo' on Linux/Mac or
 'run as administrator' on Windows.
 
 Flags:
-  --all      - Provision all suitable devices that are attached to this system.
-  --a        - Alias for --all
-  --cleanup  - Cleanup temporary files after provisioning completes.
-  --dismount - Dismount devices after provisioning completes.
-  --eject    - Eject/PowerOff devices after provisioning completes.
-	--ffu      - Place the split ffu files on the media after provisioning completes.
-  --warning  - Display a confirmation prompt before non-installers are overwritten.
-  --distro   - The os distribution to be provisioned, typically 'windows' or 'linux'
-  --track    - The track (variant) of the installer to provision.
-	--update   - Attempts to perform a device refresh only (for non-admin users).
-  --info     - Display console messages with debugging information included.
-  --verbose   - Increase info log verbosity to maximum, used as an alias for '--v 5'.
-  --v        - Controls the level of info log verbosity.
+  --all        - Provision all suitable devices that are attached to this system.
+  --a          - Alias for --all
+  --cleanup    - Cleanup temporary files after provisioning completes.
+  --dismount   - Dismount devices after provisioning completes.
+  --eject      - Eject/PowerOff devices after provisioning completes.
+	--ffu        - Place the split ffu files on the media after provisioning completes.
+  --warning    - Display a confirmation prompt before non-installers are overwritten.
+  --distro     - The os distribution to be provisioned, typically 'windows' or 'linux'
+  --track      - The track (variant) of the installer to provision.
+	--conf_track - The track (variant) of the configuration to provision.
+	--update     - Attempts to perform a device refresh only (for non-admin users).
+  --info       - Display console messages with debugging information included.
+  --verbose    - Increase info log verbosity to maximum, used as an alias for '--v 5'.
+  --v          - Controls the level of info log verbosity.
 
   --show_fixed    - Includes fixed disks when searching for suitable devices.
   --minimum [int] - The minimum size in GB to consider when searching.
@@ -237,6 +243,7 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&c.update, "update", c.update, "attempts to perform a device refresh only for non-admin users")
 	f.StringVar(&c.distro, "distro", c.distro, "the os distribution to be provisioned, typically 'windows' or 'linux'")
 	f.StringVar(&c.track, "track", c.track, "track (variant) of the installer to provision")
+	f.StringVar(&c.confTrack, "conf_track", c.track, "track (variant) of the configuration file to provision, only valid with FFU based distros")
 	f.StringVar(&c.seedServer, "seed_server", "", "override the default server to use for obtaining seeds, only used for debugging")
 	f.BoolVar(&c.info, "info", false, "display console messages with debugging information included")
 	f.IntVar(&c.v, "v", 1, "controls the level of info log verbosity")
@@ -310,6 +317,13 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 		logger.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
 		return subcommands.ExitFailure
 	}
+	// Check if ffu/conf track flags were changed without using an ffu based image.
+	if !c.ffu && c.confTrack != c.track {
+		logger.Errorf("Conf track passed on a non-ffu based distro.\n" +
+			"Pass an FFU based distro in order to use the conf_track flag.\n")
+		return subcommands.ExitUsageError
+
+	}
 
 	// We now know we have a valid list of devices to provision, and we can
 	// begin provisioning.
@@ -327,7 +341,7 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	// Generate a writer configuration.
-	conf, err := config.New(c.cleanup, c.warning, c.eject, c.ffu, c.update, f.Args(), c.distro, c.track, c.seedServer)
+	conf, err := config.New(c.cleanup, c.warning, c.eject, c.ffu, c.update, f.Args(), c.distro, c.track, c.confTrack, c.seedServer)
 	if err != nil {
 		return fmt.Errorf("%w: config.New(cleanup: %t, warning: %t, eject: %t, ffu: %t, devices: %v, distro: %s, track: %s, seedServer: %s) returned %v",
 			errConfig, c.cleanup, c.warning, c.eject, c.ffu, f.Args(), c.distro, c.track, c.seedServer, err)

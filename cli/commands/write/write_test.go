@@ -132,6 +132,24 @@ func TestExecute(t *testing.T) {
 			verbose: false,
 			want:    subcommands.ExitFailure,
 		},
+		{
+			desc:    "--conf_track passed on non ffu distro",
+			cmd:     &writeCmd{},
+			args:    []string{"--track=stable", "--conf_track=stable"},
+			execute: func(c *writeCmd, f *flag.FlagSet) error { return nil },
+			logDir:  filepath.Dir(filepath.Join(os.TempDir(), binaryName)),
+			verbose: false,
+			want:    subcommands.ExitUsageError,
+		},
+		{
+			desc:    "--conf_track and --ffu_track passed on ffu distro",
+			cmd:     &writeCmd{ffu: true},
+			args:    []string{"--conf_track=testing", "1"},
+			execute: func(c *writeCmd, f *flag.FlagSet) error { return nil },
+			logDir:  filepath.Dir(filepath.Join(os.TempDir(), binaryName)),
+			verbose: false,
+			want:    subcommands.ExitSuccess,
+		},
 	}
 	for _, tt := range tests {
 		// Generate the logDir if specified

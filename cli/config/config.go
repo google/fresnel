@@ -74,21 +74,22 @@ type distribution struct {
 // Configuration represents the state of all flags and selections provided
 // by the user when the binary is invoked.
 type Configuration struct {
-	cleanup  bool
-	devices  []string
-	distro   *distribution
-	dismount bool
-	ffu      bool
-	update   bool
-	eject    bool
-	elevated bool // If the user is running as root.
-	track    string
-	warning  bool
+	cleanup   bool
+	devices   []string
+	distro    *distribution
+	dismount  bool
+	ffu       bool
+	update    bool
+	eject     bool
+	elevated  bool // If the user is running as root.
+	track     string
+	confTrack string
+	warning   bool
 }
 
 // New generates a new configuration from flags passed on the command line.
 // It performs sanity checks on those parameters.
-func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track, seedServer string) (*Configuration, error) {
+func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track, confTrack, seedServer string) (*Configuration, error) {
 	// Create a partial config using known good values.
 	conf := &Configuration{
 		cleanup: cleanup,
@@ -106,9 +107,15 @@ func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track,
 	if err := conf.addDistro(os); err != nil {
 		return nil, fmt.Errorf("addDistro(%q) returned %v", os, err)
 	}
-	// Sanity check the image track and add it to the config.
-	if err := conf.addTrack(track); err != nil {
+	var err error
+	// Sanity check the image and configuration tracks and add them to the config.
+	if conf.track, err = validateTrack(track, conf.distro.images); err != nil {
 		return nil, err
+	}
+	if ffu {
+		if conf.confTrack, err = validateTrack(confTrack, conf.distro.configs); err != nil {
+			return nil, err
+		}
 	}
 	// Sanity check the seed server and override if instructed to do so by flag.
 	if err := conf.addSeedServer(seedServer); err != nil {
@@ -186,28 +193,26 @@ func (c *Configuration) addSeedServer(fqdn string) error {
 	return nil
 }
 
-func (c *Configuration) addTrack(track string) error {
-	// Check that a default image is avaialble in the distro.
-	if _, ok := c.distro.images["default"]; !ok {
-		return fmt.Errorf("%w: a default image is not available", errInput)
+func validateTrack(track string, distro map[string]string) (string, error) {
+	// Check that a default is available in the distro.
+	if _, ok := distro["default"]; !ok {
+		return "", fmt.Errorf("%w: a default track is not available", errInput)
 	}
 	// If no track was provided, the existing default is used.
 	if track == "" {
-		c.track = "default"
-		return nil
+		return "default", nil
 	}
 	// Sanity check the specified track against the available
 	// options for the distro.
-	if _, ok := c.distro.images[track]; !ok {
+	if _, ok := distro[track]; !ok {
 		var opts []string
-		for o := range c.distro.images {
+		for o := range distro {
 			opts = append(opts, o)
 		}
-		return fmt.Errorf("%w: invalid image track requested: %q is not in %v", errTrack, track, opts)
+		return "", fmt.Errorf("%w: invalid track requested: %q is not in %v", errTrack, track, opts)
 	}
-	// Set the chosen, sanity checked image.
-	c.track = track
-	return nil
+	// Return the chosen, sanity checked track.
+	return track, nil
 }
 
 // Distro returns the name of the selected distribution, or blank
@@ -283,12 +288,12 @@ func (c *Configuration) ConfFile() string {
 
 // FileName returns the name of the config file.
 func (c *Configuration) FileName() string {
-	return c.distro.configs[c.track]
+	return c.distro.configs[c.confTrack]
 }
 
 // Path returns the path to the config.
 func (c *Configuration) Path() string {
-	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.track])
+	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.confTrack])
 }
 
 // PowerOff returns whether or not devices should be powered off after write

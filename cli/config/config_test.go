@@ -30,8 +30,15 @@ var (
 			"default": "default_installer.img",
 			"stable":  "stable_installer.img",
 		},
+		configs: map[string]string{
+			"default": "default_config.yaml",
+			"stable":  "stable_config.yaml",
+		},
+		sfus: map[string]string{
+			"default": "default_manifest.json",
+			"stable":  "stable_manifest.json",
+		},
 	}
-
 	distroDefaults = distributions
 )
 
@@ -42,7 +49,10 @@ var (
 // https://godoc.org/github.com/google/go-cmp/cmp#Exporter
 func cmpConfig(got, want Configuration) error {
 	if got.track != want.track {
-		return fmt.Errorf("configuration track mismatch, got: %q, want: %q", got.track, want.track)
+		return fmt.Errorf("image track mismatch, got: %q, want: %q", got.track, want.track)
+	}
+	if got.confTrack != want.confTrack {
+		return fmt.Errorf("configuration track mismatch, got: %q, want: %q", got.confTrack, want.confTrack)
 	}
 	if got.cleanup != want.cleanup {
 		return fmt.Errorf("configuration cleanup mismatch, got: %t, want: %t", got.cleanup, want.cleanup)
@@ -83,9 +93,11 @@ func TestNew(t *testing.T) {
 	tests := []struct {
 		desc           string
 		fakeIsElevated func() (bool, error)
+		ffu            bool
 		devices        []string
 		os             string
 		track          string
+		confTrack      string
 		seedServer     string
 		out            *Configuration
 		want           error
@@ -107,6 +119,16 @@ func TestNew(t *testing.T) {
 			os:      "windows",
 			track:   "foo",
 			want:    errTrack,
+		},
+		{
+			desc:           "bad ffu track",
+			devices:        []string{"disk1"},
+			ffu:            true,
+			os:             "windowsffu",
+			confTrack:      "foo",
+			track:          "foo",
+			fakeIsElevated: func() (bool, error) { return true, nil },
+			want:           errTrack,
 		},
 		{
 			desc:       "bad seed server",
@@ -138,10 +160,27 @@ func TestNew(t *testing.T) {
 			},
 			want: nil,
 		},
+		{
+			desc:           "valid config with ffu",
+			devices:        []string{"disk1"},
+			os:             "windowsffu",
+			ffu:            true,
+			confTrack:      "stable",
+			track:          "stable",
+			fakeIsElevated: func() (bool, error) { return true, nil },
+			out: &Configuration{
+				distro:    &goodDistro,
+				track:     "stable",
+				confTrack: "stable",
+				devices:   []string{"disk1"},
+				elevated:  true,
+			},
+			want: nil,
+		},
 	}
 	for _, tt := range tests {
 		IsElevatedCmd = tt.fakeIsElevated
-		c, got := New(false, false, false, false, false, tt.devices, tt.os, tt.track, tt.seedServer)
+		c, got := New(false, false, false, tt.ffu, false, tt.devices, tt.os, tt.track, tt.confTrack, tt.seedServer)
 		if got == tt.want {
 			continue
 		}
@@ -322,7 +361,7 @@ func TestAddSeedServer(t *testing.T) {
 	}
 }
 
-func TestAddTrack(t *testing.T) {
+func TestValidateTrack(t *testing.T) {
 	badDistro := distribution{
 		imageServer: imageServer,
 		images: map[string]string{
@@ -331,50 +370,46 @@ func TestAddTrack(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc   string
-		track  string
-		distro distribution
-		out    Configuration
-		want   error
+		desc  string
+		track string
+		maps  map[string]string
+		out   string
+		want  error
 	}{
 		{
-			desc:   "no default track",
-			distro: badDistro,
-			out:    Configuration{distro: &badDistro},
-			want:   errInput,
+			desc: "no default track",
+			maps: badDistro.images,
+			out:  "",
+			want: errInput,
 		},
 		{
-			desc:   "empty track",
-			distro: goodDistro,
-			out:    Configuration{track: "default", distro: &goodDistro},
-			want:   nil,
+			desc: "empty track",
+			maps: goodDistro.images,
+			out:  "default",
+			want: nil,
 		},
 		{
-			desc:   "non-existent track",
-			track:  "foo",
-			distro: goodDistro,
-			out:    Configuration{distro: &goodDistro},
-			want:   errTrack,
+			desc:  "non-existent track",
+			track: "foo",
+			maps:  goodDistro.images,
+			out:   "",
+			want:  errTrack,
 		},
 		{
-			desc:   "valid track",
-			track:  "stable",
-			distro: goodDistro,
-			out:    Configuration{track: "stable", distro: &goodDistro},
-			want:   nil,
+			desc:  "valid track",
+			track: "stable",
+			maps:  goodDistro.images,
+			out:   "stable",
+			want:  nil,
 		},
 	}
 	for _, tt := range tests {
-		c := Configuration{distro: &tt.distro}
-		got := c.addTrack(tt.track)
-		if err := cmpConfig(c, tt.out); err != nil {
-			t.Errorf("%s: %v", tt.desc, err)
+		got, err := validateTrack(tt.track, tt.maps)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s: validateTrack() got: '%v', want: '%v'", tt.desc, got, tt.want)
 		}
-		if got == tt.want {
-			continue
-		}
-		if !errors.Is(got, tt.want) {
-			t.Errorf("%s: addTrack() got: '%v', want: '%v'", tt.desc, got, tt.want)
+		if got != tt.out {
+			t.Errorf("%s: validateTrack() got: '%v', want: '%v'", tt.desc, got, tt.out)
 		}
 	}
 }
@@ -528,7 +563,7 @@ func TestFileName(t *testing.T) {
 		},
 	}
 	want := "conf.yaml"
-	c := Configuration{track: track, distro: &distro}
+	c := Configuration{confTrack: track, distro: &distro}
 	if got := c.FileName(); got != want {
 		t.Errorf("FileName() got: %q, want: %q", got, want)
 	}
@@ -544,7 +579,7 @@ func TestPath(t *testing.T) {
 		},
 	}
 	want := "https://foo.bar.com/configs/yaml/conf.yaml"
-	c := Configuration{track: track, distro: &distro}
+	c := Configuration{confTrack: track, distro: &distro}
 	if got := c.Path(); got != want {
 		t.Errorf("Path() got: %q, want: %q", got, want)
 	}

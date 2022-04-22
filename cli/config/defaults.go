@@ -30,6 +30,27 @@ var distributions = map[string]distribution{
 			"stable":  "installer_img.iso",
 		},
 	},
+	"windowsffu": distribution{
+		os:          windows,
+		label:       "INSTALLER",
+		name:        "windows",
+		imageServer: "https://image.host.com/folder",
+		images: map[string]string{
+			"default":  "installer_img.iso",
+			"stable":   "installer_img.iso",
+			"unstable": "installer_img.iso",
+		},
+		sfus: map[string]string{
+			"default":  "sfu_list.json",
+			"stable":   "sfu_list.json",
+			"unstable": "sfu_list.json",
+		},
+		configs: map[string]string{
+			"default":  "installer_config.yaml",
+			"stable":   "installer_config.yaml",
+			"unstable": "installer_config.yaml",
+		},
+	},
 	"linux": distribution{
 		os:          linux,
 		name:        "linux",
