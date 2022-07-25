@@ -73,6 +73,7 @@ func init() {
 	// e.g. 'image-writer windows sdc' instead of 'image-writer write -distro=windows sdc'.
 	subcommands.Register(&writeCmd{name: "write"}, "")
 	subcommands.Register(&writeCmd{name: "windows", distro: "windows", track: "stable"}, "")
+	subcommands.Register(&writeCmd{name: "windowsdev", distro: "windowsdev", track: "stable"}, "")
 	subcommands.Register(&writeCmd{name: "windowsffu", distro: "windowsffu", track: "stable", ffu: true}, "")
 	subcommands.Register(&writeCmd{name: "windows-testing", distro: "windows", track: "testing"}, "")
 	subcommands.Register(&writeCmd{name: "windows-unstable", distro: "windows", track: "unstable"}, "")
