@@ -135,11 +135,11 @@ func TestExecute(t *testing.T) {
 		{
 			desc:    "--conf_track passed on non ffu distro",
 			cmd:     &writeCmd{},
-			args:    []string{"--track=stable", "--conf_track=stable"},
+			args:    []string{"--track=stable", "--conf_track=stable", "1"},
 			execute: func(c *writeCmd, f *flag.FlagSet) error { return nil },
 			logDir:  filepath.Dir(filepath.Join(os.TempDir(), binaryName)),
 			verbose: false,
-			want:    subcommands.ExitUsageError,
+			want:    subcommands.ExitSuccess,
 		},
 		{
 			desc:    "--conf_track and --ffu_track passed on ffu distro",

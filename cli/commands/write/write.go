@@ -72,12 +72,10 @@ func init() {
 	//
 	// e.g. 'image-writer windows sdc' instead of 'image-writer write -distro=windows sdc'.
 	subcommands.Register(&writeCmd{name: "write"}, "")
+	subcommands.Register(&writeCmd{name: "update", distro: "windows", track: "stable", update: true}, "")
 	subcommands.Register(&writeCmd{name: "windows", distro: "windows", track: "stable"}, "")
 	subcommands.Register(&writeCmd{name: "windowsdev", distro: "windowsdev", track: "stable"}, "")
 	subcommands.Register(&writeCmd{name: "windowsffu", distro: "windowsffu", track: "stable", ffu: true}, "")
-	subcommands.Register(&writeCmd{name: "windows-testing", distro: "windows", track: "testing"}, "")
-	subcommands.Register(&writeCmd{name: "windows-unstable", distro: "windows", track: "unstable"}, "")
-	subcommands.Register(&writeCmd{name: "update", distro: "windows", track: "stable", update: true}, "")
 }
 
 // writeCmd is the write subcommand to download and write the installer image
@@ -318,12 +316,11 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 		logger.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
 		return subcommands.ExitFailure
 	}
-	// Check if ffu/conf track flags were changed without using an ffu based image.
-	if !c.ffu && c.confTrack != c.track {
-		logger.Errorf("Conf track passed on a non-ffu based distro.\n" +
-			"Pass an FFU based distro in order to use the conf_track flag.\n")
-		return subcommands.ExitUsageError
 
+	// FFU images are the only ones that use confTrack. Default confTrack = track for reusability.
+	if !c.ffu && c.confTrack != "" {
+		logger.V(1).Infof("Ignoring confTrack flag %q, as this is only used for windowsffu", c.confTrack)
+		c.confTrack = ""
 	}
 
 	// We now know we have a valid list of devices to provision, and we can
