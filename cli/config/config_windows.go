@@ -19,15 +19,15 @@ package config
 
 import (
 	"fmt"
-	"os/exec"
 	"regexp"
 
 	"github.com/google/glazier/go/registry"
+	"github.com/google/winops/powershell"
 )
 
 var (
 	// Dependency injection for testing.
-	powershellCmd = powershell
+	powershellCmd = powershell.Command
 
 	// IsElevatedCmd injects the command to determine the elevation state of the
 	// user context.
@@ -43,8 +43,7 @@ var (
 // isAdmin determines if the current user is running the binary with elevated
 // permissions on Windows.
 func isAdmin() (bool, error) {
-	psBlock := `(([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match 'S-1-5-32-544')`
-	out, err := powershellCmd(psBlock)
+	out, err := powershellCmd(fmt.Sprintf("powershell.exe -File '%s'", adminScriptPath), nil, &powershell.PSConfig{ErrAction: powershell.Stop})
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", errElevation, err)
 	}
@@ -64,14 +63,4 @@ func HasWritePermissions() error {
 		return fmt.Errorf("removable media write prevented by policy")
 	}
 	return nil
-}
-
-// Powershell represents the OS command used to run a powershell cmdlet on
-// Windows.
-func powershell(psBlock string) ([]byte, error) {
-	out, err := exec.Command("powershell.exe", "-NoProfile", "-Command", psBlock).CombinedOutput()
-	if err != nil {
-		return []byte{}, fmt.Errorf(`exec.Command("powershell.exe", "-NoProfile", "-Command", %s) command returned: %q: %v`, psBlock, out, err)
-	}
-	return out, nil
 }

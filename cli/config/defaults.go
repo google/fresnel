@@ -14,7 +14,11 @@
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
 
 // distributions configures the options for different operating system
 // installers.
@@ -69,4 +73,5 @@ var (
 
 	// ErrUSBwriteAccess contains the Error message visible to users when USB write access if forbidden.
 	ErrUSBwriteAccess = fmt.Errorf("contact IT helpdesk for help")
+	adminScriptPath   = filepath.Join(os.Getenv("programfiles"), `\fresnel\scripts\check-admin.ps1`)
 )

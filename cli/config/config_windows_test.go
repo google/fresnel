@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
 // +build windows
 
 package config
@@ -19,6 +20,8 @@ package config
 import (
 	"errors"
 	"testing"
+
+	"github.com/google/winops/powershell"
 )
 
 func TestIsAdmin(t *testing.T) {
@@ -31,25 +34,25 @@ func TestIsAdmin(t *testing.T) {
 
 	tests := []struct {
 		desc      string
-		fakePSCmd func(string) ([]byte, error)
+		fakePSCmd func(string, []string, *powershell.PSConfig) ([]byte, error)
 		want      bool
 		err       error
 	}{
 		{
 			desc:      "powershell error",
-			fakePSCmd: func(string) ([]byte, error) { return nil, errElevation },
+			fakePSCmd: func(string, []string, *powershell.PSConfig) ([]byte, error) { return nil, errElevation },
 			want:      false,
 			err:       errElevation,
 		},
 		{
 			desc:      "is not admin",
-			fakePSCmd: func(string) ([]byte, error) { return outNotAdmin, nil },
+			fakePSCmd: func(string, []string, *powershell.PSConfig) ([]byte, error) { return outNotAdmin, nil },
 			want:      false,
 			err:       nil,
 		},
 		{
 			desc:      "is admin",
-			fakePSCmd: func(string) ([]byte, error) { return outIsAdmin, nil },
+			fakePSCmd: func(string, []string, *powershell.PSConfig) ([]byte, error) { return outIsAdmin, nil },
 			want:      true,
 			err:       nil,
 		},
