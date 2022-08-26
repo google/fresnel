@@ -152,6 +152,7 @@ func TestExecute(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		funcUSBPermissions = func() error { return nil }
 		// Generate the logDir if specified
 		if tt.logDir != "" {
 			if err := os.MkdirAll(tt.logDir, 0755); err != nil {
@@ -396,6 +397,7 @@ func TestRun(t *testing.T) {
 	for _, tt := range tests {
 		// Perform substitutions, generate the flagSet and set Flags.
 		config.IsElevatedCmd = tt.isElevatedCmd
+		funcUSBPermissions = func() error { return nil }
 		search = tt.searchCmd
 		newInstaller = tt.newInstCmd
 

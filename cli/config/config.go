@@ -380,7 +380,7 @@ func (c *Configuration) String() string {
 		c.PowerOff())
 }
 
-// isElevated determins if the current user is running the binary with elevated
+// isElevated determines if the current user is running the binary with elevated
 // permissions, such as 'sudo' (Linux) or 'run as administrator' (Windows).
 func isElevated() (bool, error) {
 	return IsElevatedCmd()

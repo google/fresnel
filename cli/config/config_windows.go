@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+
+	"github.com/google/glazier/go/registry"
 )
 
 var (
@@ -29,13 +31,16 @@ var (
 
 	// IsElevatedCmd injects the command to determine the elevation state of the
 	// user context.
-	IsElevatedCmd = isAdmin
+	IsElevatedCmd      = isAdmin
+	funcUSBPermissions = HasWritePermissions
 
 	// Regex for powershell handling.
 	regExAdmin = regexp.MustCompile(`S-1-5-32-544`)
+
+	denyWriteRegKey = `SOFTWARE\Policies\Microsoft\Windows\RemovableStorageDevices\{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}`
 )
 
-// isAdmin determins if the current user is running the binary with elevated
+// isAdmin determines if the current user is running the binary with elevated
 // permissions on Windows.
 func isAdmin() (bool, error) {
 	psBlock := `(([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match 'S-1-5-32-544')`
@@ -47,6 +52,18 @@ func isAdmin() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// HasWritePermissions determines if the local machine is blocked from writing to removable media via policy.
+func HasWritePermissions() error {
+	v, err := registry.GetInteger(denyWriteRegKey, "Deny_Write")
+	if err != nil && err != registry.ErrNotExist {
+		return err
+	}
+	if v == 1 {
+		return fmt.Errorf("removable media write prevented by policy")
+	}
+	return nil
 }
 
 // Powershell represents the OS command used to run a powershell cmdlet on

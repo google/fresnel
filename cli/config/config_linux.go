@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
 // +build linux
 
 package config
@@ -20,6 +21,9 @@ var (
 	// IsElevatedCmd injects the command to determine the elevation state of the
 	// user context.
 	IsElevatedCmd = isRoot
+
+	// HasWritePermissions is not supported on Linux.
+	HasWritePermissions = func() error { return nil }
 )
 
 // isRoot always returns true on Linux, as sudo is built-in to all commands.

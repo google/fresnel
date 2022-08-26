@@ -55,9 +55,10 @@ var (
 	errSearch    = errors.New("search error")
 
 	// Dependency Injections for testing
-	execute      = run
-	search       = storageSearch
-	newInstaller = installerNew
+	execute            = run
+	search             = storageSearch
+	newInstaller       = installerNew
+	funcUSBPermissions = config.HasWritePermissions
 )
 
 func init() {
@@ -326,8 +327,7 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 	// We now know we have a valid list of devices to provision, and we can
 	// begin provisioning.
 	if err = execute(c, f); err != nil {
-		logger.Error(err)
-		logger.Errorf("%s completed with errors.", binaryName)
+		logger.Errorf("%s completed with errors: %v", binaryName, err)
 		return subcommands.ExitFailure
 	}
 
@@ -338,6 +338,10 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 }
 
 func run(c *writeCmd, f *flag.FlagSet) (err error) {
+	if err := funcUSBPermissions(); err != nil {
+		logger.Warning(err)
+		return config.ErrUSBwriteAccess
+	}
 	// Generate a writer configuration.
 	conf, err := config.New(c.cleanup, c.warning, c.eject, c.ffu, c.update, f.Args(), c.distro, c.track, c.confTrack, c.seedServer)
 	if err != nil {

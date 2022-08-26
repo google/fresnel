@@ -14,50 +14,59 @@
 
 package config
 
+import "fmt"
+
 // distributions configures the options for different operating system
 // installers.
-var distributions = map[string]distribution{
-	"windows": distribution{
-		os:          windows,
-		label:       "INSTALLER",
-		name:        "windows",
-		seedServer:  "https://appengine.address.com/seed",
-		seedFile:    "sources/boot.wim",
-		seedDest:    "seed",
-		imageServer: "https://image.host.com/folder",
-		images: map[string]string{
-			"default": "installer_img.iso",
-			"stable":  "installer_img.iso",
+var (
+	// distributions configures the options for different operating system
+	// installers.
+	distributions = map[string]distribution{
+		"windows": distribution{
+			os:          windows,
+			label:       "INSTALLER",
+			name:        "windows",
+			seedServer:  "https://appengine.address.com/seed",
+			seedFile:    "sources/boot.wim",
+			seedDest:    "seed",
+			imageServer: "https://image.host.com/folder",
+			images: map[string]string{
+				"default": "installer_img.iso",
+				"stable":  "installer_img.iso",
+			},
 		},
-	},
-	"windowsffu": distribution{
-		os:          windows,
-		label:       "INSTALLER",
-		name:        "windows",
-		imageServer: "https://image.host.com/folder",
-		images: map[string]string{
-			"default":  "installer_img.iso",
-			"stable":   "installer_img.iso",
-			"unstable": "installer_img.iso",
+		"windowsffu": distribution{
+			os:          windows,
+			label:       "INSTALLER",
+			name:        "windows",
+			imageServer: "https://image.host.com/folder",
+			images: map[string]string{
+				"default":  "installer_img.iso",
+				"stable":   "installer_img.iso",
+				"unstable": "installer_img.iso",
+			},
+			sfus: map[string]string{
+				"default":  "sfu_list.json",
+				"stable":   "sfu_list.json",
+				"unstable": "sfu_list.json",
+			},
+			configs: map[string]string{
+				"default":  "installer_config.yaml",
+				"stable":   "installer_config.yaml",
+				"unstable": "installer_config.yaml",
+			},
 		},
-		sfus: map[string]string{
-			"default":  "sfu_list.json",
-			"stable":   "sfu_list.json",
-			"unstable": "sfu_list.json",
+		"linux": distribution{
+			os:          linux,
+			name:        "linux",
+			imageServer: "",
+			images: map[string]string{
+				"default": "installer.img.gz",
+				"stable":  "installer.img.gz",
+			},
 		},
-		configs: map[string]string{
-			"default":  "installer_config.yaml",
-			"stable":   "installer_config.yaml",
-			"unstable": "installer_config.yaml",
-		},
-	},
-	"linux": distribution{
-		os:          linux,
-		name:        "linux",
-		imageServer: "",
-		images: map[string]string{
-			"default": "installer.img.gz",
-			"stable":  "installer.img.gz",
-		},
-	},
-}
+	}
+
+	// ErrUSBwriteAccess contains the Error message visible to users when USB write access if forbidden.
+	ErrUSBwriteAccess = fmt.Errorf("contact IT helpdesk for help")
+)

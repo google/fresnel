@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build darwin
 // +build darwin
 
 package config
@@ -19,4 +20,7 @@ package config
 var (
 	// IsElevatedCmd is not required on Darwin.
 	IsElevatedCmd = func() (bool, error) { return true, nil }
+
+	// HasWritePermissions is not supported on Darwin.
+	HasWritePermissions = func() error { return nil }
 )
