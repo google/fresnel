@@ -19,23 +19,17 @@ package config
 
 import (
 	"fmt"
-	"os/exec"
-	"regexp"
 
+	win "golang.org/x/sys/windows"
 	"github.com/google/glazier/go/registry"
 )
 
 var (
-	// Dependency injection for testing.
-	powershellCmd = powershell
 
 	// IsElevatedCmd injects the command to determine the elevation state of the
 	// user context.
 	IsElevatedCmd      = isAdmin
 	funcUSBPermissions = HasWritePermissions
-
-	// Regex for powershell handling.
-	regExAdmin = regexp.MustCompile(`S-1-5-32-544`)
 
 	denyWriteRegKey = `SOFTWARE\Policies\Microsoft\Windows\RemovableStorageDevices\{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}`
 )
@@ -43,15 +37,35 @@ var (
 // isAdmin determines if the current user is running the binary with elevated
 // permissions on Windows.
 func isAdmin() (bool, error) {
-	psBlock := `(([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match 'S-1-5-32-544')`
-	out, err := powershellCmd(psBlock)
+
+	var sid *win.SID
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-checktokenmembership
+	err := win.AllocateAndInitializeSid(
+		&win.SECURITY_NT_AUTHORITY,
+		2,
+		win.SECURITY_BUILTIN_DOMAIN_RID,
+		win.DOMAIN_ALIAS_RID_ADMINS,
+		0, 0, 0, 0, 0, 0,
+		&sid)
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", errElevation, err)
+		return false, fmt.Errorf("sid error: %v", err)
 	}
-	if regExAdmin.Match(out) {
+
+	token := win.Token(0)
+	defer token.Close()
+
+	member, err := token.IsMember(sid)
+	if err != nil {
+		return false, fmt.Errorf("Token Membership Error: %v", err)
+	}
+
+	// user is currently an admin
+	if member {
 		return true, nil
 	}
-	return false, nil
+
+	return false, errElevation
 }
 
 // HasWritePermissions determines if the local machine is blocked from writing to removable media via policy.
@@ -64,14 +78,4 @@ func HasWritePermissions() error {
 		return fmt.Errorf("removable media write prevented by policy")
 	}
 	return nil
-}
-
-// Powershell represents the OS command used to run a powershell cmdlet on
-// Windows.
-func powershell(psBlock string) ([]byte, error) {
-	out, err := exec.Command("powershell.exe", "-NoProfile", "-Command", psBlock).CombinedOutput()
-	if err != nil {
-		return []byte{}, fmt.Errorf(`exec.Command("powershell.exe", "-NoProfile", "-Command", %s) command returned: %q: %v`, psBlock, out, err)
-	}
-	return out, nil
 }
