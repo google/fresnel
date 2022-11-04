@@ -109,7 +109,7 @@ The pe_allowlist.yaml file lists the hashes that may be signed when requesting
 seeds. It is also checked when requests are made to /sign to determine if the
 seed making the request was generated using an acceptable hash.
 
-pe_allowlist.yaml must be stored in your cloud bucket in a folder named
+pe_allowlist.yaml must be stored in your cloud bucket in the a folder named
 'appengine_config'.
 
 See [pe_allowlist.yaml](examples/pe_allowlist.yaml) in the examples folder for
