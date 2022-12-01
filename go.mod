@@ -1,6 +1,6 @@
 module github.com/google/fresnel
 
-go 1.16
+go 1.18
 
 require (
 	cloud.google.com/go/storage v1.16.0
