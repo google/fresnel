@@ -390,17 +390,17 @@ func (i *Installer) Prepare(d Device) error {
 // to be prepared for file copy operations. Elevated permissions are required
 // in order to prepare a device in this manner.
 func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
-	logger.V(2).Infof("Preparing %q for ISO with elevation.", d.Identifier())
+	logger.V(2).Infof("Preparing %q for ISO with elevation.", d.FriendlyName())
 	if !i.config.Elevated() {
 		return errElevation
 	}
 	// Preparing a device for an ISO follows these steps:
 	// Wipe -> Re-Partition -> Format
-	logger.V(2).Infof("Wiping %q.", d.Identifier())
+	logger.V(2).Infof("Wiping %q.", d.FriendlyName())
 	if err := d.Wipe(); err != nil {
 		return fmt.Errorf("%w: Wipe() returned %v", errWipe, err)
 	}
-	logger.V(2).Infof("Partitioning %q.", d.Identifier())
+	logger.V(2).Infof("Partitioning %q.", d.FriendlyName())
 	if err := d.Partition(i.config.DistroLabel()); err != nil {
 		return fmt.Errorf("Partition returned %v: %w", err, errPartition)
 	}
@@ -428,7 +428,7 @@ func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
 // when there is a label mismatch. Elevated permissions are not required for
 // this operation.
 func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
-	logger.V(2).Infof("Preparing %q for ISO without elevation.", d.Identifier())
+	logger.V(2).Infof("Preparing %q for ISO without elevation.", d.FriendlyName())
 	// Preparing the device for an ISO follows these steps:
 	// Erase default partition -> Check label (warn if necessary)
 	part, err := selectPart(d, size, storage.FAT32)
@@ -443,7 +443,7 @@ func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
 	if err := part.Mount(base); err != nil {
 		return fmt.Errorf("Mount() for %q returned %v: %w", part.Identifier(), err, errMount)
 	}
-	logger.V(2).Infof("Preparing to erase contents of %q (device: %q, partition %q).", part.Label(), d.Identifier(), part.Identifier())
+	logger.V(2).Infof("Preparing to erase contents of %q (device: %q, partition %q).", part.Label(), d.FriendlyName(), part.Identifier())
 	if err := part.Erase(); err != nil {
 		return fmt.Errorf("%w: partition.Erase() returned %v", errWipe, err)
 	}
