@@ -36,8 +36,8 @@ import (
 
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/fresnel/models"
+	"github.com/google/deck"
 	"github.com/dustin/go-humanize"
-	"github.com/google/logger"
 	"github.com/google/winops/iso"
 	"github.com/google/winops/storage"
 
@@ -390,17 +390,17 @@ func (i *Installer) Prepare(d Device) error {
 // to be prepared for file copy operations. Elevated permissions are required
 // in order to prepare a device in this manner.
 func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
-	logger.V(2).Infof("Preparing %q for ISO with elevation.", d.FriendlyName())
+	deck.InfofA("Preparing %q for ISO with elevation.", d.FriendlyName()).With(deck.V(2)).Go()
 	if !i.config.Elevated() {
 		return errElevation
 	}
 	// Preparing a device for an ISO follows these steps:
 	// Wipe -> Re-Partition -> Format
-	logger.V(2).Infof("Wiping %q.", d.FriendlyName())
+	deck.InfofA("Wiping %q.", d.FriendlyName()).With(deck.V(2)).Go()
 	if err := d.Wipe(); err != nil {
 		return fmt.Errorf("%w: Wipe() returned %v", errWipe, err)
 	}
-	logger.V(2).Infof("Partitioning %q.", d.FriendlyName())
+	deck.InfofA("Partitioning %q.", d.FriendlyName()).With(deck.V(2)).Go()
 	if err := d.Partition(i.config.DistroLabel()); err != nil {
 		return fmt.Errorf("Partition returned %v: %w", err, errPartition)
 	}
@@ -408,12 +408,12 @@ func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
 	if runtime.GOOS == "darwin" {
 		return nil
 	}
-	logger.V(2).Infof("Looking for a partition larger than %v on %q.", humanize.Bytes(size), d.FriendlyName())
+	deck.InfofA("Looking for a partition larger than %v on %q.", humanize.Bytes(size), d.FriendlyName()).With(deck.V(2)).Go()
 	part, err := selectPart(d, size, "")
 	if err != nil {
 		return fmt.Errorf("SelectPartition(%d) returned %v: %w", size, err, errPrepare)
 	}
-	logger.V(2).Infof("Formatting partition on %q and setting a label of %q.", d.FriendlyName(), i.config.DistroLabel())
+	deck.InfofA("Formatting partition on %q and setting a label of %q.", d.FriendlyName(), i.config.DistroLabel()).With(deck.V(2)).Go()
 	if err := part.Format(i.config.DistroLabel()); err != nil {
 		return fmt.Errorf("Format returned %v: %w", err, errFormat)
 	}
@@ -428,7 +428,7 @@ func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
 // when there is a label mismatch. Elevated permissions are not required for
 // this operation.
 func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
-	logger.V(2).Infof("Preparing %q for ISO without elevation.", d.FriendlyName())
+	deck.InfofA("Preparing %q for ISO without elevation.", d.FriendlyName()).With(deck.V(2)).Go()
 	// Preparing the device for an ISO follows these steps:
 	// Erase default partition -> Check label (warn if necessary)
 	part, err := selectPart(d, size, storage.FAT32)
@@ -439,17 +439,17 @@ func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
 	if runtime.GOOS != "windows" {
 		base = i.cache
 	}
-	logger.V(2).Infof("Mounting %q for erasing.", part.Identifier())
+	deck.InfofA("Mounting %q for erasing.", part.Identifier()).With(deck.V(2)).Go()
 	if err := part.Mount(base); err != nil {
 		return fmt.Errorf("Mount() for %q returned %v: %w", part.Identifier(), err, errMount)
 	}
-	logger.V(2).Infof("Preparing to erase contents of %q (device: %q, partition %q).", part.Label(), d.FriendlyName(), part.Identifier())
+	deck.InfofA("Preparing to erase contents of %q (device: %q, partition %q).", part.Label(), d.FriendlyName(), part.Identifier()).With(deck.V(2)).Go()
 	if err := part.Erase(); err != nil {
 		return fmt.Errorf("%w: partition.Erase() returned %v", errWipe, err)
 	}
 	if !strings.Contains(part.Label(), i.config.DistroLabel()) {
 		console.Printf("\nWarning: Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.\n", part.Identifier(), i.config.DistroLabel())
-		logger.Warningf("Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.", part.Label(), i.config.DistroLabel())
+		deck.Warningf("Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.", part.Label(), i.config.DistroLabel())
 	}
 	return nil
 }
@@ -504,7 +504,7 @@ func (i *Installer) DownloadSFU() error {
 // PlaceSFU also writes a datetime file to the provisioned media.
 func (i *Installer) PlaceSFU(d Device) error {
 	// Find a compatible partition to write the FFU to.
-	logger.V(2).Infof("\nSearching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32)
+	deck.InfofA("\nSearching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32).With(deck.V(2)).Go()
 	p, err := selectPart(d, minSFUPartSize, storage.FAT32)
 	if err != nil {
 		return fmt.Errorf("SelectPartition(%q, %q, %q) returned %w: %v", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32, errPartition, err)
@@ -540,7 +540,7 @@ func (i *Installer) PlaceSFU(d Device) error {
 
 	// Write a file named after the current date since SFU images do not use seed files.
 	dateFile := filepath.Join(mountPoint, i.config.SFUDest(), time.Now().Format("20060102"))
-	logger.V(2).Infof("Writing timestamp file: %q.", dateFile)
+	deck.InfofA("Writing timestamp file: %q.", dateFile).With(deck.V(2)).Go()
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(dateFile, nil, 0644); err != nil {
 		return fmt.Errorf("ioutil.WriteFile(%q) returned %v", dateFile, err)
@@ -613,7 +613,7 @@ func (i *Installer) Provision(d Device) error {
 		return fmt.Errorf("could not find extension for %q: %w", i.config.ImageFile(), errFile)
 	}
 	// Check that the image is already in cache.
-	logger.V(2).Infof("Checking %q for existence of %q.", i.cache, i.config.ImageFile())
+	deck.InfofA("Checking %q for existence of %q.", i.cache, i.config.ImageFile()).With(deck.V(2)).Go()
 	path := filepath.Join(i.cache, i.config.ImageFile())
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("os.Stat(%q) returned %v: %w", path, err, errPath)
@@ -637,14 +637,14 @@ func (i *Installer) provisionISO(d Device) (err error) {
 	// Construct the path to the ISO.
 	path := filepath.Join(i.cache, i.config.ImageFile())
 	// Obtain an iso.Handler by mounting the ISO.
-	logger.V(2).Infof("Mounting ISO at %q.", path)
+	deck.InfofA("Mounting ISO at %q.", path).With(deck.V(2)).Go()
 	handler, err := mount(path)
 	if err != nil {
 		return fmt.Errorf("mount(%q) returned %v: %w", path, err, errMount)
 	}
 	// Close the handler on return, capturing the error if there is one.
 	defer func() {
-		logger.V(2).Infof("Dismounting ISO at %q.", handler.MountPath())
+		deck.InfofA("Dismounting ISO at %q.", handler.MountPath()).With(deck.V(2)).Go()
 		if err2 := handler.Dismount(); err2 != nil {
 			if err != nil {
 				err = fmt.Errorf("Dismount() for %q returned %v: %w", handler.MountPath(), err, err2)
@@ -660,7 +660,7 @@ func (i *Installer) provisionISO(d Device) (err error) {
 		minSize = oneGB
 	}
 	// Find a compatible partition to write to and mount if necessary.
-	logger.V(2).Infof("Searching %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSize), storage.FAT32)
+	deck.InfofA("Searching %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSize), storage.FAT32).With(deck.V(2)).Go()
 	p, err := selectPart(d, minSize, storage.FAT32)
 	if err != nil {
 		return fmt.Errorf("SelectPartition(%q, %q, %q) returned %v: %w", d.FriendlyName(), humanize.Bytes(minSize), storage.FAT32, err, errPartition)
@@ -670,12 +670,12 @@ func (i *Installer) provisionISO(d Device) (err error) {
 	if runtime.GOOS != "windows" {
 		base = i.cache
 	}
-	logger.V(2).Infof("Mounting %q for writing.", p.Identifier())
+	deck.InfofA("Mounting %q for writing.", p.Identifier()).With(deck.V(2)).Go()
 	if err := p.Mount(base); err != nil {
 		return fmt.Errorf("Mount() for %q returned %v: %w", p.Identifier(), err, errMount)
 	}
 	// Write the ISO.
-	logger.V(2).Infof("Writing ISO at %q to %q.", handler.ImagePath(), d.FriendlyName())
+	deck.InfofA("Writing ISO at %q to %q.", handler.ImagePath(), d.FriendlyName()).With(deck.V(2)).Go()
 	if err := writeISOFunc(handler, p); err != nil {
 		return fmt.Errorf("writeISO() returned %v: %w", err, errProvision)
 	}
@@ -716,7 +716,7 @@ func writeISO(iso isoHandler, part partition) error {
 	}
 	// Some operating systems list the device or indexes.
 	if len(contents) > 2 {
-		logger.V(3).Infof("contents of '%s(%s)'\n%v", part.Identifier(), part.Label(), contents)
+		deck.InfofA("contents of '%s(%s)'\n%v", part.Identifier(), part.Label(), contents).With(deck.V(3)).Go()
 		return fmt.Errorf("destination partition not empty: %w", errNotEmpty)
 	}
 	// Validate that the ISO is ready to be copied.
@@ -742,18 +742,18 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	if err != nil {
 		return fmt.Errorf("fileHash(%q) returned %w", err, errFile)
 	}
-	logger.V(2).Infof("Hashed %q: %q.", f, hex.EncodeToString(hash))
+	deck.InfofA("Hashed %q: %q.", f, hex.EncodeToString(hash)).With(deck.V(2)).Go()
 	// Connect to the seed server and request the seed.
 	u, err := username()
 	if err != nil {
 		return fmt.Errorf("username() returned %v: %w", err, errUser)
 	}
-	logger.V(2).Infof("Connecting to seed endpoint as user %q: %q.", u, i.config.SeedServer())
+	deck.InfofA("Connecting to seed endpoint as user %q: %q.", u, i.config.SeedServer()).With(deck.V(2)).Go()
 	client, err := connect(i.config.SeedServer(), u)
 	if err != nil {
 		return fmt.Errorf("fetcher.Connect(%q) returned %v: %w", i.config.SeedServer(), err, errConnect)
 	}
-	logger.V(2).Infof("Requesting seed from %q.", i.config.SeedServer())
+	deck.InfofA("Requesting seed from %q.", i.config.SeedServer()).With(deck.V(2)).Go()
 	sr, err := seedRequest(client, string(hash), i.config)
 	if err != nil {
 		return fmt.Errorf("seedRequest returned %v: %w", err, errDownload)
@@ -767,7 +767,7 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	if err != nil {
 		return fmt.Errorf("json.MarshalIndent(%v) returned: %v", seedFile, err)
 	}
-	logger.V(3).Infof("Retrieved seed: %s", content)
+	deck.InfofA("Retrieved seed: %s", content).With(deck.V(3)).Go()
 	// Determine where the seed should be written to and write it. Accommodate
 	// for Windows not understanding drive letters vs relative paths.
 	root := p.MountPoint()
@@ -775,13 +775,13 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 		root = root + `:`
 	}
 	path := filepath.Join(root, i.config.SeedDest())
-	logger.V(2).Infof("Creating seed directory: %q.", path)
+	deck.InfofA("Creating seed directory: %q.", path).With(deck.V(2)).Go()
 	// Permissions = owner:read/write/execute, group:read/execute"
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll(%q, 0755) returned %v: %w", path, err, errPerm)
 	}
 	s := filepath.Join(path, `/seed.json`)
-	logger.V(2).Infof("Writing seed: %q.", s)
+	deck.InfofA("Writing seed: %q.", s).With(deck.V(2)).Go()
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(s, content, 0644); err != nil {
 		return fmt.Errorf("ioutil.WriteFile(%q) returned %v: %w", s, err, errIO)
@@ -862,19 +862,19 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 func (i *Installer) Finalize(devices []Device, dismount bool) error {
 	for _, device := range devices {
 		if dismount {
-			logger.V(2).Infof("Refreshing partition information for %q prior to dismount.", device.Identifier())
+			deck.InfofA("Refreshing partition information for %q prior to dismount.", device.Identifier()).With(deck.V(2)).Go()
 			if err := device.DetectPartitions(false); err != nil {
 				return fmt.Errorf("DetectPartitions() for %q returned %v: %w", device.Identifier(), err, errFinalize)
 			}
 			console.Printf("Dismounting device %q.", device.Identifier())
-			logger.V(2).Infof("Dismounting device %q.", device.Identifier())
+			deck.InfofA("Dismounting device %q.", device.Identifier()).With(deck.V(2)).Go()
 			if err := device.Dismount(); err != nil {
 				return fmt.Errorf("Dismount(%s) returned %v: %w", device.Identifier(), err, errDevice)
 			}
 		}
 		if i.config.PowerOff() {
 			console.Printf("Ejecting device %q.", device.Identifier())
-			logger.V(2).Infof("Ejecting device %q.", device.Identifier())
+			deck.InfofA("Ejecting device %q.", device.Identifier()).With(deck.V(2)).Go()
 			if err := device.Eject(); err != nil {
 				return fmt.Errorf("Eject(%s) returned %v: %w", device.Identifier(), err, errIO)
 			}
@@ -882,7 +882,7 @@ func (i *Installer) Finalize(devices []Device, dismount bool) error {
 	}
 	// Clean up the cache if it still exists. os.RemoveAll returns nil if the
 	// path doesn't exist, which is convenient for us here.
-	logger.V(2).Infof("Cleaning up installer cache %q.", i.cache)
+	deck.InfofA("Cleaning up installer cache %q.", i.cache).With(deck.V(2)).Go()
 	if err := os.RemoveAll(i.cache); err != nil {
 		return fmt.Errorf("os.RemoveAll(%s) returned %v: %w", i.cache, err, errPath)
 	}

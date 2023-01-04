@@ -25,9 +25,9 @@ import (
 	// Register subcommands.
 	_ "github.com/google/fresnel/cli/commands/list"
 	_ "github.com/google/fresnel/cli/commands/write"
+	"github.com/google/deck"
 
 	"flag"
-	"github.com/google/logger"
 	"github.com/google/subcommands"
 )
 
@@ -43,7 +43,7 @@ func main() {
 	subcommands.Register(subcommands.CommandsCommand(), "")
 
 	if flag.NArg() < 1 {
-		logger.Error("ERROR: No command specified.")
+		deck.Error("ERROR: No command specified.")
 	}
 
 	// Cancel the context on sigterm and sigint.
@@ -55,7 +55,7 @@ func main() {
 		// Only handle the first sigterm or sigint and then cancel the context
 		// and ignore these signals.
 		sig := <-signalCh
-		logger.Errorf("Received %s signal. Cancelling context ...\n", sig)
+		deck.Errorf("Received %s signal. Cancelling context ...\n", sig)
 		signal.Ignore(syscall.SIGTERM, syscall.SIGINT)
 		cancelFn()
 	}()

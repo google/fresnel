@@ -25,7 +25,7 @@ import (
 
 	"flag"
 	"github.com/google/fresnel/cli/console"
-	"github.com/google/logger"
+	"github.com/google/deck"
 	"github.com/google/subcommands"
 	"github.com/google/winops/storage"
 )
@@ -124,10 +124,10 @@ func (c *listCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{}) 
 	}
 
 	console.Print("Searching for devices. This may take up to one minute...\n")
-	logger.V(1).Info("Searching for devices.")
+	deck.InfoA("Searching for devices.").With(deck.V(1)).Go()
 	devices, err := search("", uint64(c.minSize*oneGB), uint64(c.maxSize*oneGB), !c.listFixed)
 	if err != nil {
-		logger.Errorf("storage.Search(%d, %d, %t) returned %v", c.minSize, c.maxSize, !c.listFixed, err)
+		deck.Errorf("storage.Search(%d, %d, %t) returned %v", c.minSize, c.maxSize, !c.listFixed, err)
 		return subcommands.ExitFailure
 	}
 	// Wrap devices in an []console.TargetDevice.

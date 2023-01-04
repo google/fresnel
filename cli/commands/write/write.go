@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,7 +29,8 @@ import (
 	"github.com/google/fresnel/cli/config"
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/fresnel/cli/installer"
-	"github.com/google/logger"
+	"github.com/google/deck/backends/logger"
+	"github.com/google/deck"
 	"github.com/google/subcommands"
 	"github.com/google/winops/storage"
 )
@@ -292,20 +294,26 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 	lp := filepath.Join(os.TempDir(), fmt.Sprintf(`%s.log`, binaryName))
 	lf, err := os.OpenFile(lp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0660)
 	if err != nil {
-		logger.Errorf("Failed to open log file: %v", err)
+		deck.Errorf("Failed to open log file: %v", err)
 		return subcommands.ExitFailure
 	}
 	defer lf.Close()
-	defer logger.Init(binaryName, console.Verbose, true, lf).Close()
+	wr := []io.Writer{lf}
+	if console.Verbose {
+		wr = append(wr, os.Stdout)
+	}
+	deck.Add(logger.Init(io.MultiWriter(wr...), 0))
+	defer deck.Close()
+
 	// Verbosity will need to be a flag in main
-	logger.SetLevel(logger.Level(c.v))
+	deck.SetVerbosity(c.v)
 
 	// Log startup for upstream consumption by dashboards.
-	logger.V(1).Infof("%s is initializing.\n", binaryName)
+	deck.InfofA("%s is initializing.\n", binaryName).With(deck.V(1)).Go()
 
 	// Check if any devices were specified.
 	if f.NArg() == 0 && !c.allDrives {
-		logger.Errorf("No devices were specified.\n"+
+		deck.Errorf("No devices were specified.\n"+
 			"Use the 'list' command to list available devices or use the '--all' flag to write to all suitable devices.\n"+
 			"usage: %s %s\n", os.Args[0], c.Usage())
 		return subcommands.ExitUsageError
@@ -314,32 +322,32 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 	// Setting both all and listFixed is not allowed to protect users from
 	// unintentional wiping of their fixed (os) disks.
 	if c.allDrives && c.listFixed {
-		logger.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
+		deck.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
 		return subcommands.ExitFailure
 	}
 
 	// FFU images are the only ones that use confTrack. Default confTrack = track for reusability.
 	if !c.ffu && c.confTrack != "" {
-		logger.V(1).Infof("Ignoring confTrack flag %q, as this is only used for windowsffu", c.confTrack)
+		deck.InfofA("Ignoring confTrack flag %q, as this is only used for windowsffu", c.confTrack).With(deck.V(1)).Go()
 		c.confTrack = ""
 	}
 
 	// We now know we have a valid list of devices to provision, and we can
 	// begin provisioning.
 	if err = execute(c, f); err != nil {
-		logger.Errorf("%s completed with errors: %v", binaryName, err)
+		deck.Errorf("%s completed with errors: %v", binaryName, err)
 		return subcommands.ExitFailure
 	}
 
 	// Log completion for upstream consumption by dashboards.
 	console.Printf("%s completed successfully.", binaryName)
-	logger.V(1).Infof("%s completed successfully.", binaryName)
+	deck.InfofA("%s completed successfully.", binaryName).With(deck.V(1)).Go()
 	return subcommands.ExitSuccess
 }
 
 func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	if err := funcUSBPermissions(); err != nil {
-		logger.Warning(err)
+		deck.Warning(err)
 		return config.ErrUSBwriteAccess
 	}
 	// Generate a writer configuration.
@@ -355,7 +363,7 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 
 	// Pull a list of suitable devices.
 	console.Printf("Searching for available devices... ")
-	logger.V(1).Infof("Searching for available devices... ")
+	deck.InfofA("Searching for available devices... ").With(deck.V(1)).Go()
 	available, err := search("", uint64(c.minSize*oneGB), uint64(c.maxSize*oneGB), !c.listFixed)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errSearch, err)
@@ -386,14 +394,14 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		targets = append(targets, d)
 	}
 
-	logger.V(3).Infof("Configuration to be applied:\n%s", conf)
+	deck.InfofA("Configuration to be applied:\n%s", conf).With(deck.V(3)).Go()
 	// Adjust wording based on whether or not we're doing an update.
 	writeType := "provisioned"
 	if c.update {
 		writeType = "updated"
 	}
 	console.Printf("The following devices will be %s with the latest %s [%s] installer:\n", writeType, conf.Distro(), conf.Track())
-	logger.V(2).Infof("Devices %v will be %s with the latest %s [%s] installer.\n", writeType, conf.Devices(), conf.Distro(), conf.Track())
+	deck.InfofA("Devices %v will be %s with the latest %s [%s] installer.\n", writeType, conf.Devices(), conf.Distro(), conf.Track()).With(deck.V(2)).Go()
 
 	// Wrap targets in the interface required for the prompt.
 	devices := []console.TargetDevice{}
@@ -429,20 +437,20 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 
 	// Retrieve the image. This step occurs only once for n>0 devices.
 	console.Printf("\nRetrieving image...\n    %s ->\n    %s", conf.Image(), i.Cache())
-	logger.V(1).Infof("Retrieving image...\n    %s ->\n    %s\n\n", conf.Image(), i.Cache())
+	deck.InfofA("Retrieving image...\n    %s ->\n    %s\n\n", conf.Image(), i.Cache()).With(deck.V(1)).Go()
 	if err := i.Retrieve(); err != nil {
 		return fmt.Errorf("%w: Retrieve() returned %v", errRetrieve, err)
 	}
 	// Prepare and provision devices. This step occurs once per device.
 	for _, device := range targets {
 		console.Printf("\nPreparing device %q...", device.FriendlyName())
-		logger.V(1).Infof("Preparing device %q...", device.FriendlyName())
+		deck.InfofA("Preparing device %q...", device.FriendlyName()).With(deck.V(1)).Go()
 		// Prepare the device.
 		if err := i.Prepare(device); err != nil {
 			return fmt.Errorf("%w: Prepare(%q) returned %v: ", errPrepare, device.FriendlyName(), err)
 		}
 		console.Printf("Provisioning device %q...", device.FriendlyName())
-		logger.V(1).Infof("Provisioning device %q...", device.FriendlyName())
+		deck.InfofA("Provisioning device %q...", device.FriendlyName()).With(deck.V(1)).Go()
 		// Provision the device.
 		if err := i.Provision(device); err != nil {
 			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
