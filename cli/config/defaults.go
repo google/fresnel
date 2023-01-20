@@ -67,6 +67,6 @@ var (
 		},
 	}
 
-	// ErrUSBwriteAccess contains the Error message visible to users when USB write access if forbidden.
+	// ErrUSBwriteAccess contains the Error message visible to users when USB write access is forbidden.
 	ErrUSBwriteAccess = fmt.Errorf("contact IT helpdesk for help")
 )

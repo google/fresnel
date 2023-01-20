@@ -313,7 +313,7 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 	// Check if any devices were specified.
 	if f.NArg() == 0 && !c.allDrives {
-		deck.Errorf("No devices were specified.\n"+
+		console.Printf("No devices were specified.\n"+
 			"Use the 'list' command to list available devices or use the '--all' flag to write to all suitable devices.\n"+
 			"usage: %s %s\n", os.Args[0], c.Usage())
 		return subcommands.ExitUsageError
@@ -322,6 +322,7 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 	// Setting both all and listFixed is not allowed to protect users from
 	// unintentional wiping of their fixed (os) disks.
 	if c.allDrives && c.listFixed {
+		console.Print("Only one of '--all' or '--show_fixed' is allowed.")
 		deck.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
 		return subcommands.ExitFailure
 	}
@@ -335,6 +336,7 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 	// We now know we have a valid list of devices to provision, and we can
 	// begin provisioning.
 	if err = execute(c, f); err != nil {
+		console.Printf("%s completed with errors: %v", binaryName, err)
 		deck.Errorf("%s completed with errors: %v", binaryName, err)
 		return subcommands.ExitFailure
 	}
@@ -347,6 +349,9 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	if err := funcUSBPermissions(); err != nil {
+		if errors.Is(err, config.ErrWritePerms) {
+			console.Print(err)
+		}
 		deck.Warning(err)
 		return config.ErrUSBwriteAccess
 	}

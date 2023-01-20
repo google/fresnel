@@ -75,7 +75,7 @@ func HasWritePermissions() error {
 		return err
 	}
 	if v == 1 {
-		return fmt.Errorf("removable media write prevented by policy")
+		return ErrWritePerms
 	}
 	return nil
 }

@@ -36,6 +36,11 @@ var (
 	errSeed      = errors.New("seed error")
 	errTrack     = errors.New("track error")
 
+	// Exported errors
+
+	// ErrWritePerms indicates a problem obtaining write permissions for removable media
+	ErrWritePerms = errors.New("removable media write prevented by policy")
+
 	// Regex Matching
 	regExDevicePath = regexp.MustCompile(`^[a-zA-Z0-9/]`)
 	regExDeviceID   = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
