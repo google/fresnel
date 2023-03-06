@@ -14,7 +14,7 @@ require (
 	github.com/google/winops v0.0.0-20210803215038-c8511b84de2b
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	golang.org/x/sys v0.2.0
+	golang.org/x/sys v0.5.0
 	google.golang.org/appengine v1.6.7
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -34,9 +34,9 @@ require (
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20210615190721-d04028783cf1 // indirect
-	golang.org/x/text v0.3.8 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/api v0.49.0 // indirect
 	google.golang.org/genproto v0.0.0-20210624174822-c5cf32407d0a // indirect
