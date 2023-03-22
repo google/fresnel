@@ -25,7 +25,7 @@ import (
 )
 
 func init() {
-	evt, err := eventlog.Init(binaryName)
+	evt, err := eventlog.InitWithDefaultInstall(binaryName)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
