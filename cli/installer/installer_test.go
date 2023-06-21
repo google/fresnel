@@ -479,6 +479,7 @@ type fakeDevice struct {
 	selErr    error
 	wipeErr   error
 	writeErr  error
+	probeErr  error
 }
 
 func (f *fakeDevice) Dismount() error {
@@ -503,6 +504,10 @@ func (f *fakeDevice) SelectPartition(uint64, storage.FileSystem) (*storage.Parti
 
 func (f *fakeDevice) Wipe() error {
 	return f.wipeErr
+}
+
+func (f *fakeDevice) ProbeDevicePartitions() error {
+	return f.probeErr
 }
 
 // fakePartition represents storage.Partition.
@@ -623,6 +628,13 @@ func TestPrepare(t *testing.T) {
 			want:      nil,
 		},
 		{
+			desc:      "prepare for iso with elevation success",
+			installer: &Installer{config: &fakeConfig{distroLabel: "test", imageFile: goodISO, elevated: true}},
+			device:    &fakeDevice{},
+			selPart:   func(Device, uint64, storage.FileSystem) (partition, error) { return &fakePartition{}, nil },
+			want:      nil,
+		},
+		{
 			desc:      "prepare for iso without elevation failure",
 			installer: &Installer{config: &fakeConfig{imageFile: goodISO, elevated: false, update: true}},
 			device:    &fakeDevice{},
@@ -636,6 +648,22 @@ func TestPrepare(t *testing.T) {
 			selPart:   func(Device, uint64, storage.FileSystem) (partition, error) { return &fakePartition{}, nil },
 			want:      nil,
 		},
+	}
+	if runtime.GOOS != "darwin" {
+		tests = append(tests, struct {
+			desc      string
+			installer *Installer
+			config    Configuration
+			device    Device
+			selPart   func(Device, uint64, storage.FileSystem) (partition, error)
+			want      error
+		}{
+			desc:      "prepare for iso with elevation probe error",
+			installer: &Installer{config: &fakeConfig{distroLabel: "test", imageFile: goodISO, elevated: true}},
+			device:    &fakeDevice{probeErr: errors.New("error")},
+			selPart:   func(Device, uint64, storage.FileSystem) (partition, error) { return &fakePartition{}, nil },
+			want:      errProbe,
+		})
 	}
 	for _, tt := range tests {
 		selectPart = tt.selPart

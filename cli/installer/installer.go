@@ -83,6 +83,7 @@ var (
 	errPath        = errors.New("path error")
 	errPerm        = errors.New("permissions error")
 	errPost        = errors.New("http post error")
+	errProbe       = errors.New("partition probe error")
 	errPrepare     = errors.New("preparation error")
 	errProvision   = errors.New("provisioning error")
 	errRename      = errors.New("file rename error")
@@ -139,6 +140,7 @@ type Device interface {
 	FriendlyName() string
 	Identifier() string
 	Partition(string) error
+	ProbeDevicePartitions() error
 	DetectPartitions(bool) error
 	SelectPartition(uint64, storage.FileSystem) (*storage.Partition, error)
 	Size() uint64
@@ -408,11 +410,18 @@ func (i *Installer) prepareForISOWithElevation(d Device, size uint64) error {
 	if runtime.GOOS == "darwin" {
 		return nil
 	}
+
+	deck.InfofA("Forcing OS rescan of partition tables on %q.", d.FriendlyName()).With(deck.V(2)).Go()
+	if err := d.ProbeDevicePartitions(); err != nil {
+		return fmt.Errorf("Rescan of partition table on %q returned %v: %w", d.FriendlyName(), err, errProbe)
+	}
+
 	deck.InfofA("Looking for a partition larger than %v on %q.", humanize.Bytes(size), d.FriendlyName()).With(deck.V(2)).Go()
 	part, err := selectPart(d, size, "")
 	if err != nil {
 		return fmt.Errorf("SelectPartition(%d) returned %v: %w", size, err, errPrepare)
 	}
+
 	deck.InfofA("Formatting partition on %q and setting a label of %q.", d.FriendlyName(), i.config.DistroLabel()).With(deck.V(2)).Go()
 	if err := part.Format(i.config.DistroLabel()); err != nil {
 		return fmt.Errorf("Format returned %v: %w", err, errFormat)
