@@ -726,6 +726,7 @@ func writeISO(iso isoHandler, part partition) error {
 	if len(iso.Contents()) < 1 {
 		return errEmpty
 	}
+	deck.InfofA("iso.Copy(): src(%s) dst(%s)", iso.MountPath(), part.MountPoint()).With(deck.V(3)).Go()
 	return iso.Copy(part.MountPoint())
 }
 
