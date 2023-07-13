@@ -31,7 +31,7 @@ var (
 	// Wrapped errors for testing.
 	errDistro    = errors.New(`distribution selection error`)
 	errDevice    = errors.New(`device error`)
-	errElevation = errors.New(`elevation detection error: are you running the application as admin (Windows) or sudo (mac/linux)?`)
+	errElevation = errors.New(`elevation detection error: attempting to re-run with admin privileges`)
 	errInput     = errors.New("invalid or missing input")
 	errSeed      = errors.New("seed error")
 	errTrack     = errors.New("track error")

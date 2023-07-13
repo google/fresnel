@@ -19,6 +19,9 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"syscall"
 
 	win "golang.org/x/sys/windows"
 	"github.com/google/glazier/go/registry"
@@ -65,7 +68,31 @@ func isAdmin() (bool, error) {
 		return true, nil
 	}
 
+	if err := runAsAdmin(); err != nil {
+		return false, fmt.Errorf("runAsAdmin Error: %v", err)
+	}
+
 	return false, errElevation
+}
+
+// If not run in an Admin session, try to re-open in one.
+func runAsAdmin() error {
+	verb := "runas"
+	exe, _ := os.Executable()
+	cwd, _ := os.Getwd()
+	args := strings.Join(os.Args[1:], " ")
+
+	verbPtr, _ := syscall.UTF16PtrFromString(verb)
+	exePtr, _ := syscall.UTF16PtrFromString(exe)
+	cwdPtr, _ := syscall.UTF16PtrFromString(cwd)
+	argPtr, _ := syscall.UTF16PtrFromString(args)
+
+	var showCmd int32 = 1 //SW_NORMAL
+
+	if err := win.ShellExecute(0, verbPtr, exePtr, argPtr, cwdPtr, showCmd); err != nil {
+		return (err)
+	}
+	return nil
 }
 
 // HasWritePermissions determines if the local machine is blocked from writing to removable media via policy.
