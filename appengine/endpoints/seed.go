@@ -17,6 +17,7 @@ package endpoints
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -173,11 +174,15 @@ func signSeedResponse(ctx context.Context, s models.Seed) (models.SeedResponse, 
 	}
 	s.Certs = certs
 
+	log.Infof(ctx, "certs: %v", len(certs))
+
 	jsonSeed, err := json.Marshal(s)
 	if err != nil {
 		return models.SeedResponse{},
 			fmt.Errorf("failed to marshal seed before signing: %v", err)
 	}
+
+	log.Infof(ctx, "marshalled with a total byte size of: %v", binary.Size(jsonSeed))
 
 	_, sig, err := appengine.SignBytes(ctx, jsonSeed)
 	if err != nil {
