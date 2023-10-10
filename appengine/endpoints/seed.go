@@ -173,6 +173,11 @@ func signSeedResponse(ctx context.Context, s models.Seed) (models.SeedResponse, 
 		return models.SeedResponse{}, fmt.Errorf("appengine.PublicCertificates(): %v", err)
 	}
 	s.Certs = certs
+	// Limit the maximum number of public certificates to 5 prior to the signing request because of
+	// GAE 8kb blob limit: b/304275368
+	if len(certs) >= 5 {
+		s.Certs = certs[:5]
+	}
 
 	log.Infof(ctx, "certs: %v", len(certs))
 
