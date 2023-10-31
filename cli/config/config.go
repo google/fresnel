@@ -293,7 +293,8 @@ func (c *Configuration) ConfFile() string {
 
 // FileName returns the name of the config file.
 func (c *Configuration) FileName() string {
-	return c.distro.configs[c.confTrack]
+	// Return the filename only.
+	return filepath.Base(c.distro.configs[c.confTrack])
 }
 
 // Path returns the path to the config.
