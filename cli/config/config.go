@@ -238,6 +238,12 @@ func (c *Configuration) Track() string {
 	return c.track
 }
 
+// ConfTrack returns the selected confTrack for FFU. This generally maps
+// to one of default, unstable, testing, or stable.
+func (c *Configuration) ConfTrack() string {
+	return c.confTrack
+}
+
 // Image returns the full path to the raw image for this configuration.
 func (c *Configuration) Image() string {
 	return fmt.Sprintf(`%s/%s`, c.distro.imageServer, c.distro.images[c.track])
@@ -361,6 +367,11 @@ func (c *Configuration) String() string {
   SeedFile    : %q
   SeedDest    : %q
 
+  confTrack   : %q
+  confFile    : %q
+  FFUPath     : %q
+  FFUFileName : %q
+
   SFUPath     : %q
   SFUDest     : %q
   SFUManifest : %q
@@ -379,6 +390,10 @@ func (c *Configuration) String() string {
 		c.SeedServer(),
 		c.SeedFile(),
 		c.SeedDest(),
+		c.ConfTrack(),
+		c.ConfFile(),
+		c.Path(),
+		c.FileName(),
 		c.SFUPath(),
 		c.SFUDest(),
 		c.SFUManifest(),
