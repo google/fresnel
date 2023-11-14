@@ -244,8 +244,8 @@ func (c *Configuration) ConfTrack() string {
 	return c.confTrack
 }
 
-// Image returns the full path to the raw image for this configuration.
-func (c *Configuration) Image() string {
+// ImagePath returns the full path to the raw image for this configuration.
+func (c *Configuration) ImagePath() string {
 	return fmt.Sprintf(`%s/%s`, c.distro.imageServer, c.distro.images[c.track])
 }
 
@@ -271,25 +271,9 @@ func (c *Configuration) UpdateDevices(newDevices []string) {
 	c.devices = newDevices
 }
 
-// FFU returns whether or not to place the SFU files after provisioning.
+// FFU returns whether or not to place the FFU config file after provisioning.
 func (c *Configuration) FFU() bool {
 	return c.ffu
-}
-
-// SFUDest returns the relative path where the SFU files should be written.
-func (c *Configuration) SFUDest() string {
-	return c.distro.sfuDest
-}
-
-// SFUManifest returns the filename of the SFU manifest file for this configuration.
-func (c *Configuration) SFUManifest() string {
-	// Return the filename only.
-	return filepath.Base(c.distro.sfus[c.track])
-}
-
-// SFUPath returns the path to the SFU manifest.
-func (c *Configuration) SFUPath() string {
-	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.label, c.track)
 }
 
 // ConfFile returns the final name of the configuration file.
@@ -297,14 +281,14 @@ func (c *Configuration) ConfFile() string {
 	return c.distro.confFile
 }
 
-// FileName returns the name of the config file.
-func (c *Configuration) FileName() string {
+// FFUConfFile returns the name of the config file.
+func (c *Configuration) FFUConfFile() string {
 	// Return the filename only.
 	return filepath.Base(c.distro.configs[c.confTrack])
 }
 
-// Path returns the path to the config.
-func (c *Configuration) Path() string {
+// FFUConfPath returns the path to the config.
+func (c *Configuration) FFUConfPath() string {
 	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.confTrack])
 }
 
@@ -360,7 +344,7 @@ func (c *Configuration) String() string {
   Distribution: %q
   Label       : %q
   Track       : %q
-  Image       : %q
+  ImagePath   : %q
   ImageFile   : %q
 
   SeedServer  : %q
@@ -369,12 +353,8 @@ func (c *Configuration) String() string {
 
   confTrack   : %q
   confFile    : %q
-  FFUPath     : %q
-  FFUFileName : %q
-
-  SFUPath     : %q
-  SFUDest     : %q
-  SFUManifest : %q
+  FFUConfPath : %q
+  FFUConfFile : %q
 
   Targets     : %v
   PowerOff    : %t`,
@@ -385,18 +365,15 @@ func (c *Configuration) String() string {
 		c.Distro(),
 		c.DistroLabel(),
 		c.Track(),
-		c.Image(),
+		c.ImagePath(),
 		c.ImageFile(),
 		c.SeedServer(),
 		c.SeedFile(),
 		c.SeedDest(),
 		c.ConfTrack(),
 		c.ConfFile(),
-		c.Path(),
-		c.FileName(),
-		c.SFUPath(),
-		c.SFUDest(),
-		c.SFUManifest(),
+		c.FFUConfPath(),
+		c.FFUConfFile(),
 		c.Devices(),
 		c.PowerOff())
 }

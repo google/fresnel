@@ -451,8 +451,8 @@ func TestImage(t *testing.T) {
 	}
 	want := fmt.Sprintf(`%s/%s`, imageServer, distro.images[track])
 	c := Configuration{track: track, distro: &distro}
-	if got := c.Image(); got != want {
-		t.Errorf("Image() got: %q, want: %q", got, want)
+	if got := c.ImagePath(); got != want {
+		t.Errorf("ImagePath() got: %q, want: %q", got, want)
 	}
 }
 
@@ -508,54 +508,7 @@ func TestImageFile(t *testing.T) {
 	}
 }
 
-func TestSFUPath(t *testing.T) {
-	track := `default`
-	distro := distribution{
-		imageServer: `https://foo.bar.com`,
-		images: map[string]string{
-			track: "manifest.json",
-		},
-		label: "nombre",
-	}
-	want := "https://foo.bar.com/nombre/default"
-	c := Configuration{track: track, distro: &distro}
-	if got := c.SFUPath(); got != want {
-		t.Errorf("SFUPath() got: %q, want: %q", got, want)
-	}
-}
-
-func TestSFUManifest(t *testing.T) {
-	tests := []struct {
-		desc string
-		sfus map[string]string
-		want string
-	}{
-		{
-			desc: "json",
-			sfus: map[string]string{"default": "manifest.json"},
-			want: "manifest.json",
-		},
-		{
-			desc: "nested json",
-			sfus: map[string]string{"default": "nested/manifest.json"},
-			want: "manifest.json",
-		},
-	}
-	for _, tt := range tests {
-		c := Configuration{
-			track: "default",
-			distro: &distribution{
-				sfus: tt.sfus,
-			},
-		}
-		got := c.SFUManifest()
-		if got != tt.want {
-			t.Errorf("%s: SFUManifest() got: %q, want: %q", tt.desc, got, tt.want)
-		}
-	}
-}
-
-func TestFileName(t *testing.T) {
+func TestFFUConfFile(t *testing.T) {
 	track := `default`
 	distro := distribution{
 		configs: map[string]string{
@@ -564,12 +517,12 @@ func TestFileName(t *testing.T) {
 	}
 	want := "conf.yaml"
 	c := Configuration{confTrack: track, distro: &distro}
-	if got := c.FileName(); got != want {
-		t.Errorf("FileName() got: %q, want: %q", got, want)
+	if got := c.FFUConfFile(); got != want {
+		t.Errorf("FFUConfFile() got: %q, want: %q", got, want)
 	}
 }
 
-func TestPath(t *testing.T) {
+func TestFFUConfPath(t *testing.T) {
 	track := `default`
 	distro := distribution{
 		imageServer: `https://foo.bar.com`,
@@ -580,8 +533,8 @@ func TestPath(t *testing.T) {
 	}
 	want := "https://foo.bar.com/configs/yaml/conf.yaml"
 	c := Configuration{confTrack: track, distro: &distro}
-	if got := c.Path(); got != want {
-		t.Errorf("Path() got: %q, want: %q", got, want)
+	if got := c.FFUConfPath(); got != want {
+		t.Errorf("FFUConfPath() got: %q, want: %q", got, want)
 	}
 }
 

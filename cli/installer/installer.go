@@ -32,7 +32,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/fresnel/models"
@@ -52,7 +51,6 @@ var (
 	connect         = fetcherConnect
 	connectWithCert = tlsConnect
 	downloadFile    = download
-	getManifest     = readManifest
 	mount           = mountISO
 	selectPart      = selectPartition
 	writeISOFunc    = writeISO
@@ -68,8 +66,6 @@ var (
 	errElevation   = errors.New("elevation is required for this operation")
 	errEmpty       = errors.New("iso is empty")
 	errEmptyUser   = errors.New("could not determine username")
-	errSFUManifest = errors.New("missing sfu manifest")
-	errSFUPath     = errors.New("sfu path empty")
 	errFile        = errors.New("file error")
 	errFinalize    = errors.New("finalize error")
 	errFormat      = errors.New("format error")
@@ -101,9 +97,6 @@ var (
 	// Regex for file matching.
 	regExFileExt  = regexp.MustCompile(`\.[A-Za-z.]+`)
 	regExFileName = regexp.MustCompile(`[\w,\s-]+\.[A-Za-z.]+$`)
-
-	// minSFUPartSize represents the minimum partition size for SFU workflow.
-	minSFUPartSize = 12 * oneGB
 )
 
 // httpDoer represents an http client that can retrieve files with the Do
@@ -116,20 +109,17 @@ type httpDoer interface {
 type Configuration interface {
 	ConfFile() string
 	DistroLabel() string
-	Image() string
+	ImagePath() string
 	ImageFile() string
 	Elevated() bool
 	FFU() bool
-	SFUManifest() string
-	SFUPath() string
 	PowerOff() bool
 	SeedDest() string
 	SeedFile() string
 	SeedServer() string
-	SFUDest() string
 	UpdateOnly() bool
-	FileName() string
-	Path() string
+	FFUConfFile() string
+	FFUConfPath() string
 }
 
 // Device represents storage.Device.
@@ -172,11 +162,6 @@ type Installer struct {
 	config Configuration // The configuration for this installer.
 }
 
-// SFUManifest struct for SFU manifest json.
-type SFUManifest struct {
-	Filename string
-}
-
 // New generates a new Installer from a configuration, with all the
 // information needed to provision the installer on an available device.
 func New(config Configuration) (*Installer, error) {
@@ -187,8 +172,8 @@ func New(config Configuration) (*Installer, error) {
 	// Connect serves only to give an early warning if the SSO token is expired.
 	// It is only called if the config specifies that a seed is required.
 	if config.SeedServer() != "" {
-		if _, err := connect(config.Image(), ""); err != nil {
-			return nil, fmt.Errorf("fetcher.Connect(%q) returned %v: %w", config.Image(), err, errConnect)
+		if _, err := connect(config.ImagePath(), ""); err != nil {
+			return nil, fmt.Errorf("fetcher.Connect(%q) returned %v: %w", config.ImagePath(), err, errConnect)
 		}
 	}
 
@@ -266,7 +251,7 @@ func (i *Installer) retrieveFile(fileName, filePath string) (err error) {
 // depending on whether or not the distribution will be FFU based.
 func (i *Installer) Retrieve() (err error) {
 	// Confirm that the Installer has what we need.
-	if i.config.Image() == "" {
+	if i.config.ImagePath() == "" {
 		return fmt.Errorf("%w: missing image path", errConfig)
 	}
 	if i.cache == "" {
@@ -276,37 +261,24 @@ func (i *Installer) Retrieve() (err error) {
 	// If FFU is false, retrieve only the image file.
 	// Otherwise retrieve the image file and FFU manifest.
 	if !i.config.FFU() {
-		return i.retrieveFile(i.config.ImageFile(), i.config.Image())
-	}
-
-	// Check FFU Path configuration.
-	if i.config.SFUPath() == "" {
-		return errSFUPath
-	}
-
-	// Check FFU Manifest configuration.
-	if i.config.SFUManifest() == "" {
-		return errSFUManifest
+		return i.retrieveFile(i.config.ImageFile(), i.config.ImagePath())
 	}
 
 	// Check for missing conf file name.
-	if i.config.FileName() == "" {
+	if i.config.FFUConfFile() == "" {
 		return errConfName
 	}
 
 	// Check conf path configuration.
-	if i.config.Path() == "" {
+	if i.config.FFUConfPath() == "" {
 		return errConfPath
 	}
 
-	if err := i.retrieveFile(i.config.FileName(), i.config.Path()); err != nil {
+	if err := i.retrieveFile(i.config.FFUConfFile(), i.config.FFUConfPath()); err != nil {
 		return fmt.Errorf("%w: %v", errYAML, err)
 	}
 
-	if err := i.retrieveFile(i.config.ImageFile(), i.config.Image()); err != nil {
-		return fmt.Errorf("%w: %v", errImage, err)
-	}
-	return i.retrieveFile(i.config.SFUManifest(), fmt.Sprintf("%s/%s", i.config.SFUPath(), i.config.SFUManifest()))
+	return i.retrieveFile(i.config.ImageFile(), i.config.ImagePath())
 }
 
 // download obtains the installer using the provided client and writes it
@@ -451,101 +423,6 @@ func (i *Installer) prepareForISOWithoutElevation(d Device, size uint64) error {
 		console.Printf("\nWarning: Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.\n", part.Identifier(), i.config.DistroLabel())
 		deck.Warningf("Selected partition %q does not have a label that contains %q. Updating devices that were not previously provisioned by this tool is a best effort service. The device may not function as expected.", part.Label(), i.config.DistroLabel())
 	}
-	return nil
-}
-
-// readManifest ingests the downloaded FFU manifest and returns
-// an array object.
-func readManifest(path string) ([]SFUManifest, error) {
-	// sfus represents the json struct for the SFU manifest.
-	var sfus []SFUManifest
-	manifest, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("%w failed to read file: %v", errFile, err)
-	}
-	if err := json.Unmarshal(manifest, &sfus); err != nil {
-		return nil, fmt.Errorf("%w: %v", errUnmarshal, err)
-	}
-	return sfus, nil
-}
-
-// DownloadSFU downloads the SFU file and places it in the cache.
-func (i *Installer) DownloadSFU() error {
-	if i.cache == "" {
-		return fmt.Errorf("missing cache location: %w", errCache)
-	}
-	sfus, err := getManifest(filepath.Join(i.cache, i.config.SFUManifest()))
-	if err != nil {
-		return fmt.Errorf("readManifest() %w: %v", errManifest, err)
-	}
-	// Connect to the download server and retrieve the file.
-	client, err := connectWithCert()
-	if err != nil {
-		return fmt.Errorf("fetcher.TLSClient() returned %w: %v", errConnect, err)
-	}
-	for _, sfu := range sfus {
-		path := filepath.Join(i.cache, sfu.Filename)
-		f, err := os.Create(path)
-		if err != nil {
-			return fmt.Errorf("ioutil.TempFile(%q, %q) returned %w: %v", i.cache, i.config.SFUManifest(), errFile, err)
-		}
-		defer f.Close()
-
-		if err := downloadFile(client, fmt.Sprintf(`%s/%s`, i.config.SFUPath(), sfu.Filename), f); err != nil {
-			return fmt.Errorf("DownloadSFU() returned %w: %v", errDownload, err)
-		}
-
-	}
-	return nil
-}
-
-// PlaceSFU copies and renames SFU files and config files onto
-// provisioned media from the local cache. For additional verification,
-// PlaceSFU also writes a datetime file to the provisioned media.
-func (i *Installer) PlaceSFU(d Device) error {
-	// Find a compatible partition to write the FFU to.
-	deck.InfofA("\nSearching for FFU %q for a %q partition larger than %v.", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32).With(deck.V(2)).Go()
-	p, err := selectPart(d, minSFUPartSize, storage.FAT32)
-	if err != nil {
-		return fmt.Errorf("SelectPartition(%q, %q, %q) returned %w: %v", d.FriendlyName(), humanize.Bytes(minSFUPartSize), storage.FAT32, errPartition, err)
-	}
-	sfus, err := getManifest(filepath.Join(i.cache, i.config.SFUManifest()))
-	if err != nil {
-		return fmt.Errorf("getManifest() returned: %w: %v", errManifest, err)
-	}
-	// Copy SFU files.
-	for ind, sfu := range sfus {
-		console.Printf("Copying SFU %d of %d...", ind+1, len(sfus))
-		if err := fileCopy(sfu.Filename, i.config.SFUDest(), i.cache, p); err != nil {
-			return fmt.Errorf("fileCopy() failed for %s to %s: %v", sfu.Filename, i.config.SFUDest(), err)
-		}
-	}
-	// Copy config.
-	console.Printf("Copying %s", i.config.FileName())
-	if err := fileCopy(i.config.FileName(), i.config.SFUDest(), i.cache, p); err != nil {
-		return fmt.Errorf("fileCopy() failed for %s to %s: %v", i.config.FileName(), i.config.SFUDest(), err)
-	}
-
-	// Rename config to the YAML to have a consistent file name.
-	mountPoint := p.MountPoint()
-	if runtime.GOOS == "windows" && len(p.MountPoint()) < 2 {
-		mountPoint = fmt.Sprintf("%s:", p.MountPoint())
-	}
-	oldConf := filepath.Join(mountPoint, i.config.SFUDest(), i.config.FileName())
-	newConf := filepath.Join(mountPoint, i.config.SFUDest(), i.config.ConfFile())
-	console.Printf("\nRenaming %q to %q", oldConf, newConf)
-	if err := os.Rename(oldConf, newConf); err != nil {
-		return fmt.Errorf("%w: %v", errRename, err)
-	}
-
-	// Write a file named after the current date since SFU images do not use seed files.
-	dateFile := filepath.Join(mountPoint, i.config.SFUDest(), time.Now().Format("20060102"))
-	deck.InfofA("Writing timestamp file: %q.", dateFile).With(deck.V(2)).Go()
-	// Permissions = owner:read/write, group:read"
-	if err := ioutil.WriteFile(dateFile, nil, 0644); err != nil {
-		return fmt.Errorf("ioutil.WriteFile(%q) returned %v", dateFile, err)
-	}
-
 	return nil
 }
 

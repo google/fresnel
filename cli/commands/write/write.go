@@ -45,9 +45,7 @@ var (
 
 	// Wrapped errors for testing.
 	errConfig    = errors.New("config error")
-	errCopy      = errors.New("sfu file copy error")
 	errDevice    = errors.New("device error")
-	errDownload  = errors.New("sfu download error")
 	errInstaller = errors.New("installer error")
 	errElevation = errors.New("elevation error")
 	errFinalize  = errors.New("finalize error")
@@ -272,8 +270,6 @@ type imageInstaller interface {
 	Cache() string
 	Finalize([]installer.Device, bool) error
 	Retrieve() error
-	DownloadSFU() error
-	PlaceSFU(installer.Device) error
 	Prepare(installer.Device) error
 	Provision(installer.Device) error
 }
@@ -441,8 +437,8 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	}(targets)
 
 	// Retrieve the image. This step occurs only once for n>0 devices.
-	console.Printf("\nRetrieving image...\n    %s ->\n    %s", conf.Image(), i.Cache())
-	deck.InfofA("Retrieving image...\n    %s ->\n    %s\n\n", conf.Image(), i.Cache()).With(deck.V(1)).Go()
+	console.Printf("\nRetrieving image...\n    %s ->\n    %s", conf.ImagePath(), i.Cache())
+	deck.InfofA("Retrieving image...\n    %s ->\n    %s\n\n", conf.ImagePath(), i.Cache()).With(deck.V(1)).Go()
 	if err := i.Retrieve(); err != nil {
 		return fmt.Errorf("%w: Retrieve() returned %v", errRetrieve, err)
 	}
@@ -459,16 +455,6 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		// Provision the device.
 		if err := i.Provision(device); err != nil {
 			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
-		}
-		if c.ffu {
-			console.Printf("Downloading SFU Files...")
-			if err := i.DownloadSFU(); err != nil {
-				return fmt.Errorf("%w: %v", errDownload, err)
-			}
-			console.Printf("\nCopying SFU Files to %s...", device.FriendlyName())
-			if err := i.PlaceSFU(device); err != nil {
-				return fmt.Errorf("%w: %v", errCopy, err)
-			}
 		}
 	}
 	return nil
