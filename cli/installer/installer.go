@@ -489,11 +489,19 @@ func (i *Installer) Provision(d Device) error {
 	if ext == "" {
 		return fmt.Errorf("could not find extension for %q: %w", i.config.ImageFile(), errFile)
 	}
-	// Check that the image is already in cache.
+	// Check that the image is already in the cache.
 	deck.InfofA("Checking %q for existence of %q.", i.cache, i.config.ImageFile()).With(deck.V(2)).Go()
 	path := filepath.Join(i.cache, i.config.ImageFile())
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("os.Stat(%q) returned %v: %w", path, err, errPath)
+	}
+	// Check that the FFU config is already in the cache.
+	if i.config.FFU() {
+		deck.InfofA("Checking %q for existence of %q.", i.cache, i.config.FFUConfFile()).With(deck.V(2)).Go()
+		path := filepath.Join(i.cache, i.config.FFUConfFile())
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("os.Stat(%q) returned %v: %w", path, err, errPath)
+		}
 	}
 
 	// Provision the device.
@@ -555,6 +563,13 @@ func (i *Installer) provisionISO(d Device) (err error) {
 	deck.InfofA("Writing ISO at %q to %q.", handler.ImagePath(), d.FriendlyName()).With(deck.V(2)).Go()
 	if err := writeISOFunc(handler, p); err != nil {
 		return fmt.Errorf("writeISO() returned %v: %w", err, errProvision)
+	}
+
+	// If FFU, write config to disk.
+	if i.config.FFU() {
+		if err := i.writeConfig(p); err != nil {
+			return fmt.Errorf("writeConfig() returned %v", err)
+		}
 	}
 
 	// If no seed is required, return early, otherwise, retrieve and write
@@ -663,6 +678,32 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(s, content, 0644); err != nil {
 		return fmt.Errorf("ioutil.WriteFile(%q) returned %v: %w", s, err, errIO)
+	}
+	return nil
+}
+
+// writeConfig writes the FFU config file to disk using SeedDest directory.
+func (i *Installer) writeConfig(p partition) error {
+	source := filepath.Join(i.cache, i.config.FFUConfFile())
+	content, err := ioutil.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("ioutil.ReadFile(%q) returned %v: %w", source, err, errIO)
+	}
+	root := p.MountPoint()
+	if runtime.GOOS == "windows" && !strings.Contains(root, `:`) {
+		root = root + `:`
+	}
+	dest := filepath.Join(root, i.config.SeedDest())
+	deck.InfofA("Creating config directory: %q.", dest).With(deck.V(2)).Go()
+	// Permissions = owner:read/write/execute, group:read/execute"
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return fmt.Errorf("os.MkdirAll(%q, 0755) returned %v: %w", dest, err, errPerm)
+	}
+	destFile := filepath.Join(dest, i.config.FFUConfFile())
+	deck.InfofA("Writing config: %q.", destFile).With(deck.V(2)).Go()
+	// Permissions = owner:read/write, group:read"
+	if err := ioutil.WriteFile(destFile, content, 0644); err != nil {
+		return fmt.Errorf("ioutil.WriteFile(%q) returned %v: %w", destFile, err, errIO)
 	}
 	return nil
 }
