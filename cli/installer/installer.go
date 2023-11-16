@@ -758,7 +758,7 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 	}
 	// If the server responded that the hash is not in the allowlist, return.
 	if strings.Contains(fmt.Sprintf("%s", respBody), "not in allowlist") {
-		return nil, fmt.Errorf("%w: %q", errResponse, hash)
+		return nil, fmt.Errorf("%w: %q", errResponse, hex.EncodeToString([]byte(hash)))
 	}
 
 	r := &models.SeedResponse{}
