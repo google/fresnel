@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -286,20 +285,9 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 		console.Verbose = true
 	}
 
-	// Initialize logging with the bare binary name as the source.
-	lp := filepath.Join(os.TempDir(), fmt.Sprintf(`%s.log`, binaryName))
-	lf, err := os.OpenFile(lp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0660)
-	if err != nil {
-		deck.Errorf("Failed to open log file: %v", err)
-		return subcommands.ExitFailure
-	}
-	defer lf.Close()
-	wr := []io.Writer{lf}
 	if console.Verbose {
-		wr = append(wr, os.Stdout)
+		deck.Add(logger.Init(os.Stdout, 0))
 	}
-	deck.Add(logger.Init(io.MultiWriter(wr...), 0))
-	defer deck.Close()
 
 	// Verbosity will need to be a flag in main
 	deck.SetVerbosity(c.v)
@@ -331,7 +319,7 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 	// We now know we have a valid list of devices to provision, and we can
 	// begin provisioning.
-	if err = execute(c, f); err != nil {
+	if err := execute(c, f); err != nil {
 		console.Printf("%s completed with errors: %v", binaryName, err)
 		deck.Errorf("%s completed with errors: %v", binaryName, err)
 		return subcommands.ExitFailure

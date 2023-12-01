@@ -18,25 +18,55 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	// Register subcommands.
 	_ "github.com/google/fresnel/cli/commands/list"
 	_ "github.com/google/fresnel/cli/commands/write"
+	"github.com/google/deck/backends/logger"
 	"github.com/google/deck"
 
 	"flag"
 	"github.com/google/subcommands"
 )
 
+var (
+	binaryName = filepath.Base(strings.ReplaceAll(os.Args[0], `.exe`, ``))
+	logFile    *os.File
+)
+
+func setupLogging() error {
+	// Initialize logging with the bare binary name as the source.
+	lp := filepath.Join(os.TempDir(), fmt.Sprintf(`%s.log`, binaryName))
+	var err error
+	logFile, err = os.OpenFile(lp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0660)
+	if err != nil {
+		return fmt.Errorf("Failed to open log file: %v", err)
+	}
+	deck.Add(logger.Init(logFile, 0))
+
+	return nil
+}
+
 func main() {
+
 	// Explicitly set the log output flag from the log package so that we can see
 	// info messages by default in the console and in the logs. Logging is
 	// initialized in each sub-command.
 	flag.Set("alsologtostderr", "true")
 	flag.Set("vmodule", "third_party/golang/fresnel*=1")
+
+	if err := setupLogging(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+	defer deck.Close()
 
 	subcommands.Register(subcommands.HelpCommand(), "")
 	subcommands.Register(subcommands.FlagsCommand(), "")

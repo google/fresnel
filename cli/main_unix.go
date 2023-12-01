@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// go:build windows
+//go:build unix || darwin
 
-package write
+package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/google/deck/backends/eventlog"
+	"github.com/google/deck/backends/syslog"
 	"github.com/google/deck"
 )
 
 func init() {
-	evt, err := eventlog.Init(binaryName)
+	sl, err := syslog.Init(binaryName, syslog.LOG_USER)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	deck.Add(evt)
+	deck.Add(sl)
 }
