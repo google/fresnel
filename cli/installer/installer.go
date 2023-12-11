@@ -43,7 +43,11 @@ import (
 	fetcher "github.com/google/splice/cli/appclient"
 )
 
-const oneGB = uint64(1073741824)
+const (
+	oneGB        = uint64(1073741824)
+	seedDestFile = `seed.json`
+	confDestFile = `startimage.yaml`
+)
 
 var (
 	// Dependency injections for testing.
@@ -673,7 +677,7 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll(%q, 0755) returned %v: %w", path, err, errPerm)
 	}
-	s := filepath.Join(path, `/seed.json`)
+	s := filepath.Join(path, seedDestFile)
 	deck.InfofA("Writing seed: %q.", s).With(deck.V(2)).Go()
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(s, content, 0644); err != nil {
@@ -699,7 +703,7 @@ func (i *Installer) writeConfig(p partition) error {
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll(%q, 0755) returned %v: %w", dest, err, errPerm)
 	}
-	destFile := filepath.Join(dest, i.config.FFUConfFile())
+	destFile := filepath.Join(dest, confDestFile)
 	deck.InfofA("Writing config: %q.", destFile).With(deck.V(2)).Go()
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(destFile, content, 0644); err != nil {
