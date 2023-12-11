@@ -40,15 +40,11 @@ var (
 			label:       "INSTALLER",
 			name:        "windows",
 			imageServer: "https://image.host.com/folder",
+			confServer:  "https://config.host.com/folder",
 			images: map[string]string{
 				"default":  "installer_img.iso",
 				"stable":   "installer_img.iso",
 				"unstable": "installer_img.iso",
-			},
-			sfus: map[string]string{
-				"default":  "sfu_list.json",
-				"stable":   "sfu_list.json",
-				"unstable": "sfu_list.json",
 			},
 			configs: map[string]string{
 				"default":  "installer_config.yaml",

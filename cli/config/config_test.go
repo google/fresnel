@@ -34,10 +34,6 @@ var (
 			"default": "default_config.yaml",
 			"stable":  "stable_config.yaml",
 		},
-		sfus: map[string]string{
-			"default": "default_manifest.json",
-			"stable":  "stable_manifest.json",
-		},
 	}
 	distroDefaults = distributions
 )
@@ -525,8 +521,7 @@ func TestFFUConfFile(t *testing.T) {
 func TestFFUConfPath(t *testing.T) {
 	track := `default`
 	distro := distribution{
-		imageServer: `https://foo.bar.com`,
-		confStore:   `configs/yaml`,
+		confServer: `https://foo.bar.com/configs/yaml`,
 		configs: map[string]string{
 			track: "conf.yaml",
 		},

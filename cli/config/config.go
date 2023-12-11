@@ -63,8 +63,7 @@ const (
 type distribution struct {
 	os          OperatingSystem
 	confFile    string // The final name of the config file.
-	confStore   string // The relative path where configs are located.
-	sfuDest     string // The relative path where SFU files will be stored.
+	confServer  string // The FFU configs are obtained here.
 	imageServer string // The base image is obtained here.
 	label       string // If set, is used to set partition labels.
 	name        string // Friendly name: e.g. Corp Windows.
@@ -72,7 +71,6 @@ type distribution struct {
 	seedFile    string // This file is hashed when obtainng a seed.
 	seedServer  string // If set, a seed is obtained from here.
 	images      map[string]string
-	sfus        map[string]string // Contains SFU manifests names.
 	configs     map[string]string // Contains config file names.
 }
 
@@ -289,7 +287,7 @@ func (c *Configuration) FFUConfFile() string {
 
 // FFUConfPath returns the path to the config.
 func (c *Configuration) FFUConfPath() string {
-	return fmt.Sprintf(`%s/%s/%s`, c.distro.imageServer, c.distro.confStore, c.distro.configs[c.confTrack])
+	return fmt.Sprintf(`%s/%s`, c.distro.confServer, c.distro.configs[c.confTrack])
 }
 
 // PowerOff returns whether or not devices should be powered off after write
