@@ -74,7 +74,7 @@ func init() {
 	subcommands.Register(&writeCmd{name: "write"}, "")
 	subcommands.Register(&writeCmd{name: "update", distro: "windows", track: "stable", update: true}, "")
 	subcommands.Register(&writeCmd{name: "windows", distro: "windows", track: "stable"}, "")
-	subcommands.Register(&writeCmd{name: "windows11", distro: "windows11", track: "stable"}, "")
+	subcommands.Register(&writeCmd{name: "windows10", distro: "windows10", track: "stable"}, "")
 	subcommands.Register(&writeCmd{name: "windowsdev", distro: "windowsdev", track: "stable"}, "")
 	subcommands.Register(&writeCmd{name: "windowsffu", distro: "windowsffu", track: "stable", ffu: true}, "")
 }
