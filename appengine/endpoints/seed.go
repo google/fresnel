@@ -32,7 +32,6 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/user"
-	"github.com/patrickmn/go-cache"
 )
 
 var (
@@ -221,7 +220,7 @@ func populateAllowlist(ctx context.Context) (map[string]bool, error) {
 		if err != nil {
 			return nil, fmt.Errorf("retrieving allowlist returned error: %v", err)
 		}
-		c.Set("acceptedHashes", ih, cache.DefaultExpiration)
+		c.Set("acceptedHashes", ih, time.Duration(5*time.Minute))
 	}
 
 	ah, ok := ih.(map[string]bool)

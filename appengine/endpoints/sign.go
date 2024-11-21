@@ -43,8 +43,8 @@ import (
 )
 
 var (
-	c                = cache.New(1*time.Hour, 90*time.Minute)
-	macRegEx         = "([^0-9,a-f,A-F,:])"
+	c                = cache.New(5*time.Minute, 90*time.Minute)
+	macRegEx         = "([^0-9,a-f,A-F,:])"	
 	bucketFileFinder = bucketFileHandle
 )
 
