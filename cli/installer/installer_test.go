@@ -791,6 +791,7 @@ func TestProvision(t *testing.T) {
 		desc      string
 		installer *Installer
 		mount     func(string) (isoHandler, error)
+		selPart   func(Device, uint64, storage.FileSystem) (partition, error)
 		writeISO  func(isoHandler, partition) error
 		want      error
 	}{
@@ -828,13 +829,19 @@ func TestProvision(t *testing.T) {
 			desc:      "success",
 			installer: &Installer{cache: fakeCache, config: &fakeConfig{imageFile: "fake.iso"}},
 			mount:     func(string) (isoHandler, error) { return &fakeHandler{}, nil },
-			writeISO:  func(isoHandler, partition) error { return nil },
-			want:      nil,
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{label: "test", id: "testid"}, nil
+			},
+			writeISO: func(isoHandler, partition) error { return nil },
+			want:     nil,
 		},
 	}
 	for _, tt := range tests {
 		mount = tt.mount
 		writeISOFunc = tt.writeISO
+		if tt.selPart != nil {
+			selectPart = tt.selPart
+		}
 		got := tt.installer.Provision(&fakeDevice{})
 		if !errors.Is(got, tt.want) {
 			t.Errorf("%s: Provision() got: %v, want: %v", tt.desc, got, tt.want)
