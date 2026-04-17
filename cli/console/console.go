@@ -28,8 +28,11 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
+	"github.com/fatih/color"
 	"github.com/dustin/go-humanize"
+	"gopkg.in/src-d/go-git.v4hub_com/olekukonko/tablewriter/v/v1/renderer"
 	"github.com/olekukonko/tablewriter"
+	"gopkg.in/src-d/go-git.v4hub_com/olekukonko/tablewriter/v/v1/tw"
 )
 
 var (
@@ -105,23 +108,25 @@ func PrintDevices(targets []TargetDevice, w io.Writer, json bool) {
 		return
 	}
 
+	opts := []tablewriter.Option{
+		tablewriter.WithHeaderAutoWrap(tw.WrapTruncate),
+		tablewriter.WithRowAutoWrap(tw.WrapTruncate),
+		tablewriter.WithFooterAutoWrap(tw.WrapTruncate),
+		tablewriter.WithHeader([]string{"Device", "Model", "Size"}),
+		tablewriter.WithRenderer(renderer.NewColorized(renderer.ColorizedConfig{
+			Borders: tw.Border{Left: tw.Off, Right: tw.Off, Top: tw.Off, Bottom: tw.Off },
+			Header: renderer.Tint{FG: renderer.Colors{color.FgGreen, color.Reset, color.Reset}},
+		})),
+	}
+
 	// Display the table to the user otherwise, output devices with table
-	table := tablewriter.NewWriter(w)
-	table.SetBorder(false)
-	table.SetAutoWrapText(false)
-	table.SetHeader([]string{"Device", "Model", "Size"})
-	table.SetHeaderColor(
-		tablewriter.Colors{tablewriter.FgGreenColor}, // Green text for device column.
-		tablewriter.Colors{},                         // No color change for model column.
-		tablewriter.Colors{},                         // No color change for size column.
-	)
+	table := tablewriter.NewTable(w, opts...)
 	for _, device := range targets {
 		table.Append([]string{
 			device.Identifier(),
 			device.FriendlyName(),
 			humanize.Bytes(device.Size()),
-		},
-		)
+		})
 	}
 	table.Render()
 }
