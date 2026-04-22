@@ -44,7 +44,7 @@ import (
 
 var (
 	c                = cache.New(5*time.Minute, 90*time.Minute)
-	macRegEx         = "([^0-9,a-f,A-F,:])"	
+	macRegEx         = "([^0-9,a-f,A-F,:])"
 	bucketFileFinder = bucketFileHandle
 )
 
@@ -65,14 +65,13 @@ func (SignRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse, err := json.Marshal(resp)
 	if err != nil {
-		es := fmt.Sprintf("json.Marshall(%#v): %v", resp, err)
-		log.Errorf(ctx, es)
+		log.Errorf(ctx, "json.Marshall(%#v): %v", resp, err)
 		http.Error(w, fmt.Sprintf(errResp, err, models.StatusJSONError), http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = w.Write(jsonResponse); err != nil {
-		log.Errorf(ctx, fmt.Sprintf("failed to write response to client: %s", err))
+		log.Errorf(ctx, "failed to write response to client: %s", err)
 		return
 	}
 	log.Infof(ctx, "successfully returned response %#v to client", resp)

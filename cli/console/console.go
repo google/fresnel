@@ -28,8 +28,9 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
-	"github.com/dustin/go-humanize"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
+	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -41,7 +42,7 @@ var (
 
 // Print displays a console message when Verbose is false. Arguments
 // are handled in the same manner as fmt.Print.
-func Print(v ...interface{}) {
+func Print(v ...any) {
 	if !Verbose {
 		fmt.Print(v...)
 	}
@@ -49,7 +50,7 @@ func Print(v ...interface{}) {
 
 // Printf displays a console message when Verbose is false. Arguments
 // are handled in the same manner as fmt.Printf.
-func Printf(format string, v ...interface{}) {
+func Printf(format string, v ...any) {
 	if !Verbose {
 		fmt.Printf(format+"\n", v...)
 	}
@@ -99,28 +100,22 @@ func PrintDevices(targets []TargetDevice, w io.Writer, json bool) {
 		return
 	}
 
-	//Check if any devices exist.
+	// Check if any devices exist.
 	if len(targets) == 0 {
 		fmt.Fprintf(w, "No matching devices were found.")
 		return
 	}
 
 	// Display the table to the user otherwise, output devices with table
-	table := tablewriter.NewWriter(w)
-	table.SetBorder(false)
-	table.SetAutoWrapText(false)
-	table.SetHeader([]string{"Device", "Model", "Size"})
-	table.SetHeaderColor(
-		tablewriter.Colors{tablewriter.FgGreenColor}, // Green text for device column.
-		tablewriter.Colors{},                         // No color change for model column.
-		tablewriter.Colors{},                         // No color change for size column.
-	)
+	table := tablewriter.NewTable(w,
+		tablewriter.WithRendition(tw.Rendition{Borders: tw.BorderNone}),
+		tablewriter.WithRowAutoWrap(tw.WrapNone))
+	table.Header("\033[32mDevice\033[0m", "Model", "Size")
 	for _, device := range targets {
-		table.Append([]string{
+		table.Append(
 			device.Identifier(),
 			device.FriendlyName(),
 			humanize.Bytes(device.Size()),
-		},
 		)
 	}
 	table.Render()

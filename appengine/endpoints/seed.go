@@ -100,14 +100,13 @@ func (SeedRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse, err := json.Marshal(resp)
 	if err != nil {
-		es := fmt.Sprintf("json.Marshall(%v): %v", resp, err)
-		log.Errorf(ctx, es)
+		log.Errorf(ctx, "json.Marshall(%v): %v", resp, err)
 		http.Error(w, fmt.Sprintf(errSeedResp, err, models.StatusJSONError), http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = w.Write(jsonResponse); err != nil {
-		log.Errorf(ctx, fmt.Sprintf("failed to write response to client: %s", err))
+		log.Errorf(ctx, "failed to write response to client: %s", err)
 		return
 	}
 
