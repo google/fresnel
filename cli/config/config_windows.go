@@ -29,7 +29,6 @@ var (
 	// IsElevatedCmd injects the command to determine the elevation state of the
 	// user context.
 	IsElevatedCmd      = isAdmin
-	funcUSBPermissions = HasWritePermissions
 
 	denyWriteRegKey = `SOFTWARE\Policies\Microsoft\Windows\RemovableStorageDevices\{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}`
 )
@@ -69,7 +68,7 @@ func isAdmin() (bool, error) {
 }
 
 // HasWritePermissions determines if the local machine is blocked from writing to removable media via policy.
-func HasWritePermissions() error {
+var HasWritePermissions = func() error {
 	v, err := registry.GetInteger(denyWriteRegKey, "Deny_Write")
 	if err != nil && err != registry.ErrNotExist {
 		return err
