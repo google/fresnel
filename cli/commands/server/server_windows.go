@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"net/http"
 	"net/rpc"
 	"net/rpc/jsonrpc"
@@ -29,19 +28,8 @@ import (
 // PipeName is the name of the named pipe used for RPC communication.
 const PipeName = `\\.\pipe\fresnel_service`
 
-var (
-	// PreWriteDiskHook allows executing custom setup logic prior to writing a disk.
-	PreWriteDiskHook = func() error { return nil }
-	// PostWriteDiskHook allows executing custom teardown logic after writing a disk.
-	PostWriteDiskHook = func() {}
-	// StartupHook allows executing custom logic when the server service starts.
-	StartupHook = func() {}
-)
-
 // FresnelService is the RPC service exposed over the named pipe.
-type FresnelService struct {
-	writeMu sync.Mutex
-}
+type FresnelService struct{}
 
 // WriteRequest represents a request to write an image to disk.
 type WriteRequest struct {
@@ -67,15 +55,6 @@ func (s *FresnelService) WriteDisk(req *WriteRequest, resp *WriteResponse) error
 		resp.Error = "Access denied: Could not securely identify the calling user."
 		return nil
 	}
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	if err := PreWriteDiskHook(); err != nil {
-		resp.Error = fmt.Sprintf("pre-write hook error: %v", err)
-		return nil
-	}
-	defer PostWriteDiskHook()
-
 	conf, err := config.New(req.Cleanup, req.Warning, req.Eject, req.FFU, req.Update, req.Devices, req.Distro, req.Track, req.ConfTrack, req.SeedServer)
 	if err != nil {
 		resp.Error = fmt.Sprintf("config error: %v", err)
@@ -92,15 +71,14 @@ func (s *FresnelService) WriteDisk(req *WriteRequest, resp *WriteResponse) error
 
 	if req.SSOCookie != "" {
 		tlsClient, err := sso.TLSClient(nil, nil)
-		if err != nil {
-			deck.Errorf("TLSClient error: %v", err)
-		}
 		if err == nil {
 			client := &ssoHTTPClient{
 				cookie: req.SSOCookie,
 				client: tlsClient,
 			}
 			i.SetHTTPClient(client)
+		} else {
+			deck.Errorf("TLSClient error: %v", err)
 		}
 	}
 
@@ -166,8 +144,6 @@ func (m *tokenCodec) Close() error {
 func (m *fresnelSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (svcSpecificEC bool, exitCode uint32) {
 	changes <- svc.Status{State: svc.StartPending}
 
-	StartupHook()
-
 	service := new(FresnelService)
 	rpc.Register(service)
 
@@ -190,7 +166,26 @@ func (m *fresnelSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes 
 			if err != nil {
 				return
 			}
-			clientToken := getClientToken(conn)
+			var clientToken windows.Token
+
+			// Extract the raw Windows pipe handle using reflection.
+			fd := getPipeHandle(conn)
+			if fd != 0 {
+				runtime.LockOSThread()
+				// Impersonate the pipe client.
+				if err := installer.ImpersonateNamedPipeClient(fd); err == nil {
+					// Grab a copy of their token.
+					if err := windows.OpenThreadToken(windows.CurrentThread(), windows.TOKEN_ALL_ACCESS, true, &clientToken); err != nil {
+						deck.Errorf("Failed to open thread token: %v", err)
+					}
+					windows.RevertToSelf()
+				} else {
+					deck.Errorf("Failed to impersonate pipe client: %v", err)
+				}
+				runtime.UnlockOSThread()
+			} else {
+				deck.Errorf("Could not extract raw pipe handle from connection")
+			}
 			// Serve the RPC connection using our injecting codec.
 			codec := &tokenCodec{
 				ServerCodec: jsonrpc.NewServerCodec(conn),
@@ -238,32 +233,6 @@ func getPipeHandle(conn net.Conn) windows.Handle {
 		}
 	}
 	return 0
-}
-
-// getClientToken impersonates the connected pipe client to retrieve their Windows token.
-func getClientToken(conn net.Conn) windows.Token {
-	fd := getPipeHandle(conn)
-	if fd == 0 {
-		deck.Errorf("Could not extract raw pipe handle from connection")
-		return 0
-	}
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	if err := installer.ImpersonateNamedPipeClient(fd); err != nil {
-		deck.Errorf("Failed to impersonate pipe client: %v", err)
-		return 0
-	}
-	defer windows.RevertToSelf()
-
-	var clientToken windows.Token
-	if err := windows.OpenThreadToken(windows.CurrentThread(), windows.TOKEN_ALL_ACCESS, true, &clientToken); err != nil {
-		deck.Errorf("Failed to open thread token: %v", err)
-		return 0
-	}
-
-	return clientToken
 }
 
 type ssoHTTPClient struct {
