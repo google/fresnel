@@ -19,12 +19,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"flag"
+	sso "github.com/google/splice/cli/appclient"
+	"github.com/google/fresnel/cli/commands/server"
 	"github.com/google/fresnel/cli/config"
 	"github.com/google/fresnel/cli/console"
 	"github.com/google/fresnel/cli/installer"
@@ -347,7 +350,10 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	}
 	// Write requires elevated permissions, Update does not.
 	if !c.update && !conf.Elevated() {
-		return fmt.Errorf("%w: elevated permissions are required to use the %q command, try again using 'sudo' (Linux/Mac) or 'run as administrator' (Windows)", errElevation, c.name)
+		if runtime.GOOS != "windows" {
+			return fmt.Errorf("%w: elevated permissions are required to use the %q command, try again using 'sudo' (Linux/Mac) or 'run as administrator' (Windows)", errElevation, c.name)
+		}
+		deck.InfofA("Not elevated on Windows, will attempt to delegate provisioning to the background service.").With(deck.V(1)).Go()
 	}
 
 	// Pull a list of suitable devices.
@@ -430,6 +436,46 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 	if err := i.Retrieve(); err != nil {
 		return fmt.Errorf("%w: Retrieve() returned %v", errRetrieve, err)
 	}
+	if !c.update && !conf.Elevated() && runtime.GOOS == "windows" {
+		console.Printf("\nDelegating provisioning to the background service...")
+		deck.InfofA("Delegating provisioning to the background service...").With(deck.V(1)).Go()
+		var deviceIDs []string
+		for _, t := range targets {
+			deviceIDs = append(deviceIDs, t.Identifier())
+		}
+		ssoCookieStr := ""
+		if conf.SeedServer() != "" {
+			if c, err := sso.Connect(conf.SeedServer(), ""); err == nil {
+				if u, err := url.Parse(conf.SeedServer()); err == nil {
+					var cookies []string
+					for _, cookie := range c.Jar.Cookies(u) {
+						cookies = append(cookies, cookie.Name+"="+cookie.Value)
+					}
+					ssoCookieStr = strings.Join(cookies, "; ")
+				}
+			}
+		}
+		req := &server.WriteRequest{
+			Cleanup:    c.cleanup,
+			Warning:    c.warning,
+			Eject:      c.eject,
+			FFU:        c.ffu,
+			Update:     c.update,
+			Devices:    deviceIDs,
+			Distro:     c.distro,
+			Track:      c.track,
+			ConfTrack:  c.confTrack,
+			SeedServer: c.seedServer,
+			CacheDir:   i.Cache(),
+			SSOCookie:  ssoCookieStr,
+		}
+
+		if err := server.ClientWrite(req); err != nil {
+			return fmt.Errorf("service delegation failed: %w", err)
+		}
+		return nil
+	}
+
 	// Prepare and provision devices. This step occurs once per device.
 	for _, device := range targets {
 		console.Printf("\nPreparing device %q...", device.FriendlyName())

@@ -27,6 +27,7 @@ import (
 
 	// Register subcommands.
 	_ "github.com/google/fresnel/cli/commands/list"
+	_ "github.com/google/fresnel/cli/commands/server"
 	_ "github.com/google/fresnel/cli/commands/write"
 	"github.com/google/deck/backends/logger"
 	"github.com/google/deck"

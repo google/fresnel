@@ -19,6 +19,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"flag"
@@ -274,6 +276,13 @@ func TestRun(t *testing.T) {
 			desc:          "elevation error",
 			cmd:           &writeCmd{distro: "windows"},
 			isElevatedCmd: func() (bool, error) { return false, nil },
+			searchCmd: func(string, uint64, uint64, bool) ([]installer.Device, error) {
+				return []installer.Device{&fakeDevice{id: "1"}}, nil
+			},
+			newInstCmd: func(config installer.Configuration) (imageInstaller, error) {
+				return &fakeInstaller{}, nil
+			},
+			args: []string{"--warning=false", "1"},
 			want:          errElevation,
 		},
 		{
@@ -410,7 +419,11 @@ func TestRun(t *testing.T) {
 
 		// Get results
 		got := run(write, flagSet)
-		if !errors.Is(got, tt.want) {
+		if tt.desc == "elevation error" && runtime.GOOS == "windows" {
+			if got == nil || !strings.Contains(got.Error(), "service delegation failed") {
+				t.Errorf("%s: run() got: %v, want error containing 'service delegation failed'", tt.desc, got)
+			}
+		} else if !errors.Is(got, tt.want) {
 			t.Errorf("%s: run() got: %v, want: %v", tt.desc, got, tt.want)
 		}
 	}

@@ -65,7 +65,7 @@ func isAdmin() (bool, error) {
 		return true, nil
 	}
 
-	return false, errElevation
+	return false, nil
 }
 
 // HasWritePermissions determines if the local machine is blocked from writing to removable media via policy.

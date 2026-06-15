@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	cloud.google.com/go/storage v1.62.1
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/docker/go-units v0.5.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/deck v1.1.0

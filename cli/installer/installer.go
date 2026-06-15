@@ -162,25 +162,18 @@ type isoHandler interface {
 
 // Installer represents an operating system installer.
 type Installer struct {
-	cache  string        // The path where temporary files are cached.
-	config Configuration // The configuration for this installer.
+	cache       string        // The path where temporary files are cached.
+	config      Configuration // The configuration for this installer.
+	httpClient  httpDoer
+	clientToken uintptr // The Windows token of the RPC client, used for impersonation.
 }
 
 // New generates a new Installer from a configuration, with all the
 // information needed to provision the installer on an available device.
-func New(config Configuration) (*Installer, error) {
+func New(config Configuration, skipWarningCheck ...bool) (*Installer, error) {
 	if config == nil {
 		return nil, errConfig
 	}
-
-	// Connect serves only to give an early warning if the SSO token is expired.
-	// It is only called if the config specifies that a seed is required.
-	if config.SeedServer() != "" {
-		if _, err := connect(config.ImagePath(), ""); err != nil {
-			return nil, fmt.Errorf("fetcher.Connect(%q) returned %v: %w", config.ImagePath(), err, errConnect)
-		}
-	}
-
 	// Create a folder for temporary files. We do not need to worry about
 	// cleaning up this folder as this is explicitly handled as part of
 	// Finalize.
@@ -188,11 +181,46 @@ func New(config Configuration) (*Installer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ioutil.TempDir() returned: %v", err)
 	}
-
-	return &Installer{
+	i := &Installer{
 		cache:  temp,
 		config: config,
-	}, nil
+	}
+
+	// Connect serves only to give an early warning if the SSO token is expired.
+	// It is only called if the config specifies that a seed is required.
+	if config.SeedServer() != "" {
+		skip := false
+		if len(skipWarningCheck) > 0 {
+			skip = skipWarningCheck[0]
+		}
+		if !skip {
+			if err := i.runAsUser(func() error {
+				if _, err := connect(config.ImagePath(), ""); err != nil {
+					return err
+				}
+				return nil
+			}); err != nil {
+				return nil, fmt.Errorf("fetcher.Connect(%q) returned %v: %w", config.ImagePath(), err, errConnect)
+			}
+		}
+	}
+
+	return i, nil
+}
+
+// SetCache overrides the default cache directory with a specific path.
+func (i *Installer) SetCache(dir string) {
+	i.cache = dir
+}
+
+// SetHTTPClient sets a custom http client for seed requests.
+func (i *Installer) SetHTTPClient(client httpDoer) {
+	i.httpClient = client
+}
+
+// SetClientToken sets the client token used for impersonating the caller on Windows.
+func (i *Installer) SetClientToken(token uintptr) {
+	i.clientToken = token
 }
 
 // fetcherConnect wraps fetcher.Connect and returns an httpDoer.
@@ -641,19 +669,32 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	}
 	deck.InfofA("Hashed %q: %q.", f, hex.EncodeToString(hash)).With(deck.V(2)).Go()
 	// Connect to the seed server and request the seed.
-	u, err := username()
+	var sr *models.SeedResponse
+	err = i.runAsUser(func() error {
+		u, err := username()
+		if err != nil {
+			return fmt.Errorf("username() returned %v: %w", err, errUser)
+		}
+		deck.InfofA("Connecting to seed endpoint as user %q: %q.", u, i.config.SeedServer()).With(deck.V(2)).Go()
+		var client httpDoer
+		if i.httpClient != nil {
+			client = i.httpClient
+		}
+		if i.httpClient == nil {
+			client, err = connect(i.config.SeedServer(), u)
+			if err != nil {
+				return fmt.Errorf("fetcher.Connect(%q) returned %v: %w", i.config.SeedServer(), err, errConnect)
+			}
+		}
+		deck.InfofA("Requesting seed from %q.", i.config.SeedServer()).With(deck.V(2)).Go()
+		sr, err = seedRequest(client, string(hash), i.config)
+		if err != nil {
+			return fmt.Errorf("seedRequest returned %v: %w", err, errDownload)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("username() returned %v: %w", err, errUser)
-	}
-	deck.InfofA("Connecting to seed endpoint as user %q: %q.", u, i.config.SeedServer()).With(deck.V(2)).Go()
-	client, err := connect(i.config.SeedServer(), u)
-	if err != nil {
-		return fmt.Errorf("fetcher.Connect(%q) returned %v: %w", i.config.SeedServer(), err, errConnect)
-	}
-	deck.InfofA("Requesting seed from %q.", i.config.SeedServer()).With(deck.V(2)).Go()
-	sr, err := seedRequest(client, string(hash), i.config)
-	if err != nil {
-		return fmt.Errorf("seedRequest returned %v: %w", err, errDownload)
+		return err
 	}
 	seedFile := models.SeedFile{
 		Seed:      sr.Seed,
@@ -689,9 +730,14 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 // writeConfig writes the FFU config file to disk using SeedDest directory.
 func (i *Installer) writeConfig(p partition) error {
 	source := filepath.Join(i.cache, i.config.FFUConfFile())
-	content, err := ioutil.ReadFile(source)
-	if err != nil {
-		return fmt.Errorf("ioutil.ReadFile(%q) returned %v: %w", source, err, errIO)
+	var content []byte
+	var err error
+	// Read the file as user to prevent reading SYSTEM-protected files.
+	if runErr := i.runAsUser(func() error {
+		content, err = ioutil.ReadFile(source)
+		return err
+	}); runErr != nil {
+		return fmt.Errorf("ReadFile as user returned %v: %w", runErr, errIO)
 	}
 	root := p.MountPoint()
 	if runtime.GOOS == "windows" && !strings.Contains(root, `:`) {
@@ -773,6 +819,19 @@ func seedRequest(client httpDoer, hash string, config Configuration) (*models.Se
 		return nil, fmt.Errorf("%w: %v %d", errSeed, r.Status, r.ErrorCode)
 	}
 	return r, nil
+}
+
+// StorageSearch wraps storage.Search and returns a slice of installer.Device.
+func StorageSearch(deviceID string, minSize, maxSize uint64, removableOnly bool) ([]Device, error) {
+	devices, err := storage.Search(deviceID, minSize, maxSize, removableOnly)
+	if err != nil {
+		return nil, fmt.Errorf("storage.Search(%s, %d, %d, %t) returned %v", deviceID, minSize, maxSize, removableOnly, err)
+	}
+	var results []Device
+	for _, d := range devices {
+		results = append(results, d)
+	}
+	return results, nil
 }
 
 // Finalize performs post-provisioning tasks for a device. It is meant to
