@@ -283,7 +283,7 @@ func TestRun(t *testing.T) {
 				return &fakeInstaller{}, nil
 			},
 			args: []string{"--warning=false", "1"},
-			want:          errElevation,
+			want: errElevation,
 		},
 		{
 			desc:          "search failure",
