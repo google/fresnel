@@ -30,6 +30,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -211,6 +212,37 @@ func validSignRequest(ctx context.Context, sr models.SignRequest) error {
 
 	if len(sr.Path) < 1 {
 		return errors.New("sign request path cannot be empty")
+	}
+
+	rawPath := strings.TrimPrefix(sr.Path, "/")
+	cleanedPath := path.Clean(rawPath)
+	if strings.Contains(sr.Path, "..") {
+		return fmt.Errorf("sign request path %q contains invalid path traversal sequences", sr.Path)
+	}
+
+	envPrefixes := os.Getenv("SIGNED_URL_PATH_PREFIXES")
+	if envPrefixes == "" {
+		return errors.New("SIGNED_URL_PATH_PREFIXES environment variable is not configured")
+	}
+
+	allowedPrefixes := strings.Split(envPrefixes, ",")
+	allowed := false
+	for _, p := range allowedPrefixes {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		cleanedPrefix := path.Clean(strings.TrimPrefix(p, "/"))
+		if !strings.HasSuffix(cleanedPrefix, "/") {
+			cleanedPrefix += "/"
+		}
+		if strings.HasPrefix(cleanedPath, cleanedPrefix) || cleanedPath == strings.TrimSuffix(cleanedPrefix, "/") {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return fmt.Errorf("sign request path %q is not under an allowed prefix", sr.Path)
 	}
 
 	return nil
