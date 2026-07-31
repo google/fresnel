@@ -81,7 +81,7 @@ func (SeedRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := validateSeedRequest(u, sr, acceptedHashes); err != nil {
 		log.Errorf(ctx, "validateSeedRequest(%s,%#v,%#v): %v", u.String(), sr, acceptedHashes, err)
 		if !strings.Contains(err.Error(), "not in allowlist") || hashCheck == "true" {
-			http.Error(w, fmt.Sprintf(errSeedResp, err, models.StatusReqUnreadable), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf(errSeedResp, "seed request validation failed", models.StatusReqUnreadable), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -161,7 +161,7 @@ func validateSeedRequest(u *user.User, sr models.SeedRequest, ah map[string]bool
 		return nil
 	}
 
-	return fmt.Errorf("request hash %v not in allowlist: %#v", hex.EncodeToString(sr.Hash), ah)
+	return fmt.Errorf("request hash %v not in allowlist", hex.EncodeToString(sr.Hash))
 }
 
 // signSeed will generate a seed response from a valid seed.
