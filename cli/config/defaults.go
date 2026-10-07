@@ -41,6 +41,7 @@ var (
 			name:        "windows",
 			imageServer: "https://image.host.com/folder",
 			confServer:  "https://config.host.com/folder",
+			ffu:         true,
 			images: map[string]string{
 				"default":  "installer_img.iso",
 				"stable":   "installer_img.iso",

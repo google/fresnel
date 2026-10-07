@@ -63,15 +63,19 @@ const (
 type distribution struct {
 	os          OperatingSystem
 	confFile    string // The final name of the config file.
-	confServer  string // The FFU configs are obtained here.
+	confServer  string // Runtime boot configs are obtained here.
 	imageServer string // The base image is obtained here.
 	label       string // If set, is used to set partition labels.
 	name        string // Friendly name: e.g. Corp Windows.
 	seedDest    string // The relative path where the seed should be written.
 	seedFile    string // This file is hashed when obtainng a seed.
 	seedServer  string // If set, a seed is obtained from here.
-	images      map[string]string
-	configs     map[string]string // Contains config file names.
+	// ffu reports whether the distribution supports FFU restoration. FFU
+	// mode is rejected for distributions where this is false, because writing
+	// the FFU config would send a normal install into FFU restoration.
+	ffu     bool
+	images  map[string]string
+	configs map[string]string // Contains config file names.
 }
 
 // Configuration represents the state of all flags and selections provided
@@ -103,20 +107,29 @@ func New(cleanup, warning, eject, ffu, update bool, devices []string, os, track,
 	}
 	if len(devices) > 0 {
 		if err := conf.addDeviceList(devices); err != nil {
-			return nil, fmt.Errorf("addDeviceList(%q) returned %v", devices, err)
+			return nil, fmt.Errorf("addDeviceList(%q) returned %w", devices, err)
 		}
 	}
 	// Sanity check the chosen distribution and add it to the config.
 	if err := conf.addDistro(os); err != nil {
-		return nil, fmt.Errorf("addDistro(%q) returned %v", os, err)
+		return nil, fmt.Errorf("addDistro(%q) returned %w", os, err)
+	}
+	// FFU mode writes a config that triggers FFU restoration at boot, so it is
+	// only allowed for distributions that support it.
+	if ffu && !conf.distro.ffu {
+		return nil, fmt.Errorf("%w: distribution %q does not support FFU", errInput, os)
 	}
 	var err error
 	// Sanity check the image and configuration tracks and add them to the config.
 	if conf.track, err = validateTrack(track, conf.distro.images); err != nil {
 		return nil, err
 	}
-	if ffu {
-		if conf.confTrack, err = validateTrack(confTrack, conf.distro.configs); err != nil {
+	if conf.NeedsConfig() {
+		ct := confTrack
+		if ct == "" {
+			ct = conf.track
+		}
+		if conf.confTrack, err = validateTrack(ct, conf.distro.configs); err != nil {
 			return nil, err
 		}
 	}
@@ -236,8 +249,9 @@ func (c *Configuration) Track() string {
 	return c.track
 }
 
-// ConfTrack returns the selected confTrack for FFU. This generally maps
-// to one of default, unstable, testing, or stable.
+// ConfTrack returns the selected track of the runtime boot config, or blank
+// when no config is needed. This generally maps to one of default, unstable,
+// testing, or stable.
 func (c *Configuration) ConfTrack() string {
 	return c.confTrack
 }
@@ -274,19 +288,38 @@ func (c *Configuration) FFU() bool {
 	return c.ffu
 }
 
+// HasConfig returns whether or not configuration files are defined for this distribution.
+func (c *Configuration) HasConfig() bool {
+	return c.distro != nil && c.distro.confServer != "" && len(c.distro.configs) > 0
+}
+
+// NeedsConfig reports whether a runtime boot config must be fetched and written.
+func (c *Configuration) NeedsConfig() bool {
+	return c.HasConfig() || c.FFU()
+}
+
 // ConfFile returns the final name of the configuration file.
 func (c *Configuration) ConfFile() string {
 	return c.distro.confFile
 }
 
-// FFUConfFile returns the name of the config file.
+// FFUConfFile returns the name of the runtime config file for the selected
+// config track, or "" when the distribution defines none. Despite its name it
+// serves both FFU and non-FFU distributions.
+// TODO(b/544866964): Rename once ConfFile is retired to avoid the collision.
 func (c *Configuration) FFUConfFile() string {
-	// Return the filename only.
+	if c.distro == nil || c.distro.configs[c.confTrack] == "" {
+		return ""
+	}
 	return filepath.Base(c.distro.configs[c.confTrack])
 }
 
-// FFUConfPath returns the path to the config.
+// FFUConfPath returns the download URL of the runtime config file for the
+// selected config track, or "" when the distribution defines none.
 func (c *Configuration) FFUConfPath() string {
+	if c.distro == nil || c.distro.confServer == "" || c.distro.configs[c.confTrack] == "" {
+		return ""
+	}
 	return fmt.Sprintf(`%s/%s`, c.distro.confServer, c.distro.configs[c.confTrack])
 }
 

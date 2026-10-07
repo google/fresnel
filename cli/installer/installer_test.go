@@ -43,12 +43,13 @@ type fakeConfig struct {
 	// config.Configuration is embedded, fakeConfig inherits all its members.
 	config.Configuration
 
-	dismount bool
-	eject    bool
-	elevated bool
-	ffu      bool
-	update   bool
-	err      error // the error returned when isElevated is called.
+	dismount  bool
+	eject     bool
+	elevated  bool
+	ffu       bool
+	hasConfig bool
+	update    bool
+	err       error // the error returned when isElevated is called.
 
 	confFile    string
 	distroLabel string
@@ -60,6 +61,10 @@ type fakeConfig struct {
 	track       string
 	ffuConfFile string
 	ffuConfPath string
+}
+
+func (f *fakeConfig) NeedsConfig() bool {
+	return f.hasConfig || f.ffu
 }
 
 func (f *fakeConfig) ConfFile() string {
@@ -267,6 +272,50 @@ func TestRetrieve(t *testing.T) {
 				ffu:         true,
 				ffuConfPath: "https://foo.bar.com/told/conf.yaml",
 				ffuConfFile: "conf.yaml",
+			}},
+			download: func(client httpDoer, path string, w io.Writer) error { return nil },
+			want:     nil,
+		},
+		{
+			desc: "non-ffu with hasConfig download success",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imagePath:   `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				hasConfig:   true,
+				ffuConfPath: "https://foo.bar.com/config/startimage.yaml",
+				ffuConfFile: "startimage.yaml",
+			}},
+			download: func(client httpDoer, path string, w io.Writer) error { return nil },
+			want:     nil,
+		},
+		{
+			desc: "non-ffu with hasConfig missing yaml config",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imagePath:   `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				hasConfig:   true,
+				ffuConfFile: "",
+				ffuConfPath: "",
+			}},
+			want: errConfName,
+		},
+		{
+			desc: "non-ffu with hasConfig missing yaml path",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imagePath:   `https://foo.bar.com/test_installer.img`,
+				imageFile:   `test_installer.img`,
+				hasConfig:   true,
+				ffuConfFile: "startimage.yaml",
+				ffuConfPath: "",
+			}},
+			want: errConfPath,
+		},
+		{
+			desc: "non-ffu without hasConfig downloads only image",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imagePath: `https://foo.bar.com/test_installer.img`,
+				imageFile: `test_installer.img`,
+				hasConfig: false,
 			}},
 			download: func(client httpDoer, path string, w io.Writer) error { return nil },
 			want:     nil,
@@ -786,6 +835,11 @@ func TestProvision(t *testing.T) {
 	if _, err := os.Create(fakeImagePath); err != nil {
 		t.Fatalf("os.Create(%q) returned %v", fakeImagePath, err)
 	}
+	fakeConfPath := filepath.Join(fakeCache, "fake_conf.yaml")
+	if _, err := os.Create(fakeConfPath); err != nil {
+		t.Fatalf("os.Create(%q) returned %v", fakeConfPath, err)
+	}
+	defer os.RemoveAll(fakeCache)
 
 	tests := []struct {
 		desc      string
@@ -826,6 +880,30 @@ func TestProvision(t *testing.T) {
 			want:      errPath,
 		},
 		{
+			desc: "hasConfig config file missing from cache",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imageFile:   "fake.iso",
+				hasConfig:   true,
+				ffuConfFile: "missing_conf.yaml",
+			}},
+			want: errPath,
+		},
+		{
+			desc: "hasConfig success",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imageFile:   "fake.iso",
+				hasConfig:   true,
+				ffuConfFile: "fake_conf.yaml",
+				seedDest:    "oci",
+			}},
+			mount: func(string) (isoHandler, error) { return &fakeHandler{}, nil },
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{label: "test", id: "testid", mount: fakeCache}, nil
+			},
+			writeISO: func(isoHandler, partition) error { return nil },
+			want:     nil,
+		},
+		{
 			desc:      "success",
 			installer: &Installer{cache: fakeCache, config: &fakeConfig{imageFile: "fake.iso"}},
 			mount:     func(string) (isoHandler, error) { return &fakeHandler{}, nil },
@@ -860,6 +938,11 @@ func TestProvisionISO(t *testing.T) {
 	if _, err := os.Create(fakeImagePath); err != nil {
 		t.Fatalf("os.Create(%q) returned %v", fakeImagePath, err)
 	}
+	fakeConfPath := filepath.Join(fakeCache, "fake_conf.yaml")
+	if _, err := os.Create(fakeConfPath); err != nil {
+		t.Fatalf("os.Create(%q) returned %v", fakeConfPath, err)
+	}
+	defer os.RemoveAll(fakeCache)
 
 	tests := []struct {
 		desc      string
@@ -905,6 +988,35 @@ func TestProvisionISO(t *testing.T) {
 			want:      errIO,
 		},
 		{
+			desc: "writeConfig error with hasConfig",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imageFile:   "fake.iso",
+				hasConfig:   true,
+				ffuConfFile: "missing.yaml",
+			}},
+			mount:    func(string) (isoHandler, error) { return &fakeHandler{}, nil },
+			device:   &fakeDevice{},
+			selPart:  func(Device, uint64, storage.FileSystem) (partition, error) { return &fakePartition{label: "test"}, nil },
+			writeISO: func(isoHandler, partition) error { return nil },
+			want:     errIO,
+		},
+		{
+			desc: "success with hasConfig",
+			installer: &Installer{cache: fakeCache, config: &fakeConfig{
+				imageFile:   "fake.iso",
+				hasConfig:   true,
+				ffuConfFile: "fake_conf.yaml",
+				seedDest:    "oci",
+			}},
+			mount:  func(string) (isoHandler, error) { return &fakeHandler{}, nil },
+			device: &fakeDevice{},
+			selPart: func(Device, uint64, storage.FileSystem) (partition, error) {
+				return &fakePartition{label: "test", mount: fakeCache}, nil
+			},
+			writeISO: func(isoHandler, partition) error { return nil },
+			want:     nil,
+		},
+		{
 			desc:      "success",
 			installer: &Installer{cache: fakeCache, config: &fakeConfig{imageFile: "fake.iso"}},
 			mount:     func(string) (isoHandler, error) { return &fakeHandler{}, nil },
@@ -922,6 +1034,224 @@ func TestProvisionISO(t *testing.T) {
 		if !errors.Is(got, tt.want) {
 			t.Errorf("%s: provisionISO() got: %v, want: %v", tt.desc, got, tt.want)
 		}
+	}
+}
+
+// TestWriteConfig verifies the destination, content, permissions, and failure
+// modes of writeConfig, including removal of the counterpart config file.
+func TestWriteConfig(t *testing.T) {
+	const confFileName = "test_config.yaml"
+	confContent := []byte("os_code: test-os-stable\ntrack: stable\nmanaged: true\n")
+	staleContent := []byte("stale: true\n")
+
+	// writeFile creates a file and any missing parent directories.
+	writeFile := func(t *testing.T, path string, content []byte, perm os.FileMode) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("os.MkdirAll(%q) returned %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, content, perm); err != nil {
+			t.Fatalf("os.WriteFile(%q) returned %v", path, err)
+		}
+	}
+
+	tests := []struct {
+		desc string
+		ffu  bool
+		// seedDest overrides the default "/oci" destination when set.
+		seedDest string
+		// confFile overrides the default cached config file name when set.
+		confFile string
+		// emptySource caches an empty config file instead of confContent.
+		emptySource bool
+		// needsPermEnforcement marks cases that rely on file permission checks,
+		// which are not enforced on Windows or for root, so they are skipped there.
+		needsPermEnforcement bool
+		// setup prepares the destination directory before writeConfig runs.
+		setup   func(t *testing.T, dest string)
+		wantErr error
+		// wantFile is the file expected to hold the config on success.
+		wantFile string
+		// wantAbsent lists files in dest that must not exist afterwards.
+		wantAbsent []string
+	}{
+		{
+			desc:       "FFU writes startimage.yaml to a fresh mount",
+			ffu:        true,
+			wantFile:   confDestFile,
+			wantAbsent: []string{bootConfDestFile},
+		},
+		{
+			desc:       "non-FFU writes bootconfig.yaml to a fresh mount",
+			wantFile:   bootConfDestFile,
+			wantAbsent: []string{confDestFile},
+		},
+		{
+			desc: "target directory already exists",
+			ffu:  true,
+			setup: func(t *testing.T, dest string) {
+				if err := os.MkdirAll(dest, 0755); err != nil {
+					t.Fatalf("os.MkdirAll(%q) returned %v", dest, err)
+				}
+			},
+			wantFile: confDestFile,
+		},
+		{
+			desc: "target file with stale content is overwritten",
+			ffu:  true,
+			setup: func(t *testing.T, dest string) {
+				writeFile(t, filepath.Join(dest, confDestFile), staleContent, 0644)
+			},
+			wantFile: confDestFile,
+		},
+		{
+			desc: "FFU removes stale bootconfig.yaml",
+			ffu:  true,
+			setup: func(t *testing.T, dest string) {
+				writeFile(t, filepath.Join(dest, bootConfDestFile), staleContent, 0644)
+			},
+			wantFile:   confDestFile,
+			wantAbsent: []string{bootConfDestFile},
+		},
+		{
+			desc: "non-FFU removes stale startimage.yaml",
+			setup: func(t *testing.T, dest string) {
+				writeFile(t, filepath.Join(dest, confDestFile), staleContent, 0644)
+			},
+			wantFile:   bootConfDestFile,
+			wantAbsent: []string{confDestFile},
+		},
+		{
+			desc:        "empty config file in cache",
+			ffu:         true,
+			emptySource: true,
+			wantFile:    confDestFile,
+		},
+		{
+			desc:     "deep nested destination directory",
+			ffu:      true,
+			seedDest: "/deep/nested/custom/oci",
+			wantFile: confDestFile,
+		},
+		{
+			desc:       "source config missing from cache",
+			ffu:        true,
+			confFile:   "nonexistent.yaml",
+			wantErr:    errIO,
+			wantAbsent: []string{confDestFile},
+		},
+		{
+			desc: "target directory path blocked by file",
+			ffu:  true,
+			setup: func(t *testing.T, dest string) {
+				writeFile(t, dest, []byte("blocking file"), 0644)
+			},
+			wantErr: errPerm,
+		},
+		{
+			desc: "FFU stale bootconfig.yaml cannot be removed",
+			ffu:  true,
+			setup: func(t *testing.T, dest string) {
+				// A non-empty directory at the stale path makes os.Remove fail on every OS.
+				writeFile(t, filepath.Join(dest, bootConfDestFile, "child"), staleContent, 0644)
+			},
+			wantErr:    errIO,
+			wantAbsent: []string{confDestFile},
+		},
+		{
+			desc: "non-FFU stale startimage.yaml cannot be removed",
+			setup: func(t *testing.T, dest string) {
+				// A non-empty directory at the stale path makes os.Remove fail on every OS.
+				writeFile(t, filepath.Join(dest, confDestFile, "child"), staleContent, 0644)
+			},
+			wantErr:    errIO,
+			wantAbsent: []string{bootConfDestFile},
+		},
+		{
+			desc:                 "read only destination directory",
+			ffu:                  true,
+			needsPermEnforcement: true,
+			setup: func(t *testing.T, dest string) {
+				if err := os.MkdirAll(dest, 0555); err != nil {
+					t.Fatalf("os.MkdirAll(%q) returned %v", dest, err)
+				}
+				t.Cleanup(func() { os.Chmod(dest, 0755) })
+			},
+			wantErr:    errIO,
+			wantAbsent: []string{confDestFile},
+		},
+		{
+			desc:                 "read only destination file",
+			ffu:                  true,
+			needsPermEnforcement: true,
+			setup: func(t *testing.T, dest string) {
+				path := filepath.Join(dest, confDestFile)
+				writeFile(t, path, []byte("readonly"), 0444)
+				t.Cleanup(func() { os.Chmod(path, 0644) })
+			},
+			wantErr: errIO,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			if tt.needsPermEnforcement && (runtime.GOOS == "windows" || os.Geteuid() == 0) {
+				t.Skip("permission checks are not enforced on Windows or for root")
+			}
+			cache := t.TempDir()
+			mount := t.TempDir()
+			source := confContent
+			if tt.emptySource {
+				source = []byte{}
+			}
+			writeFile(t, filepath.Join(cache, confFileName), source, 0644)
+			seedDest := "/oci"
+			if tt.seedDest != "" {
+				seedDest = tt.seedDest
+			}
+			confFile := confFileName
+			if tt.confFile != "" {
+				confFile = tt.confFile
+			}
+			dest := filepath.Join(mount, filepath.FromSlash(seedDest))
+			if tt.setup != nil {
+				tt.setup(t, dest)
+			}
+
+			inst := &Installer{cache: cache, config: &fakeConfig{ffu: tt.ffu, ffuConfFile: confFile, seedDest: seedDest}}
+			err := inst.writeConfig(&fakePartition{mount: mount})
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("writeConfig() returned %v, want %v", err, tt.wantErr)
+			}
+
+			if tt.wantFile != "" {
+				path := filepath.Join(dest, tt.wantFile)
+				got, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("os.ReadFile(%q) returned %v", path, err)
+				}
+				if string(got) != string(source) {
+					t.Errorf("writeConfig() wrote %q to %s, want %q", got, tt.wantFile, source)
+				}
+				if runtime.GOOS != "windows" {
+					info, err := os.Stat(path)
+					if err != nil {
+						t.Fatalf("os.Stat(%q) returned %v", path, err)
+					}
+					// The process umask may clear group or other bits from the
+					// requested 0644 (for example 0640 under umask 027), so only
+					// require owner read/write and nothing beyond 0644.
+					if mode := info.Mode().Perm(); mode&0600 != 0600 || mode&^0644 != 0 {
+						t.Errorf("%s permissions = %v, want owner read/write and no bits beyond 0644", tt.wantFile, mode)
+					}
+				}
+			}
+			for _, name := range tt.wantAbsent {
+				path := filepath.Join(dest, name)
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Errorf("os.Stat(%q) returned %v, want the file to be absent", path, err)
+				}
+			}
+		})
 	}
 }
 
@@ -1270,6 +1600,64 @@ func TestFinalize(t *testing.T) {
 		got := tt.installer.Finalize([]Device{tt.device}, tt.dismount)
 		if !errors.Is(got, tt.want) {
 			t.Errorf("%s: Finalize() got: %v, want: %v", tt.desc, got, tt.want)
+		}
+	}
+}
+
+// TestUnconfiguredDistroSkipsConfig verifies that Retrieve and provisionISO do
+// not fetch or write a configuration file when NeedsConfig is false.
+func TestUnconfiguredDistroSkipsConfig(t *testing.T) {
+	oldDownloadFile, oldMount, oldWriteISO, oldSelectPart := downloadFile, mount, writeISOFunc, selectPart
+	defer func() {
+		downloadFile, mount, writeISOFunc, selectPart = oldDownloadFile, oldMount, oldWriteISO, oldSelectPart
+	}()
+
+	fakeCache := t.TempDir()
+	fakeMount := t.TempDir()
+
+	// Unconfigured distro: hasConfig=false, ffu=false.
+	downloadedPaths := []string{}
+	downloadFile = func(client httpDoer, path string, w io.Writer) error {
+		downloadedPaths = append(downloadedPaths, path)
+		return nil
+	}
+
+	inst := &Installer{
+		cache: fakeCache,
+		config: &fakeConfig{
+			imagePath: "https://image.host.com/media/stable/test.iso",
+			imageFile: "test.iso",
+			hasConfig: false,
+			ffu:       false,
+		},
+	}
+
+	if err := inst.Retrieve(); err != nil {
+		t.Fatalf("Retrieve() returned %v", err)
+	}
+	if len(downloadedPaths) != 1 {
+		t.Errorf("Retrieve() called download %d times, want exactly 1", len(downloadedPaths))
+	}
+	if len(downloadedPaths) > 0 && downloadedPaths[0] != "https://image.host.com/media/stable/test.iso" {
+		t.Errorf("downloaded path got %q, want test.iso URL", downloadedPaths[0])
+	}
+
+	// Test provisionISO with an unconfigured distro.
+	mount = func(string) (isoHandler, error) { return &fakeHandler{}, nil }
+	writeISOFunc = func(isoHandler, partition) error { return nil }
+	selectPart = func(Device, uint64, storage.FileSystem) (partition, error) {
+		return &fakePartition{label: "test", mount: fakeMount}, nil
+	}
+
+	if err := inst.provisionISO(&fakeDevice{}); err != nil {
+		t.Fatalf("provisionISO() returned %v", err)
+	}
+
+	// Verify that no config file was created.
+	for _, name := range []string{confDestFile, bootConfDestFile} {
+		ociFile := filepath.Join(fakeMount, "oci", name)
+		if _, err := os.Stat(ociFile); !os.IsNotExist(err) {
+			t.Errorf("provisionISO() created %q for unconfigured distro, want no file", ociFile)
 		}
 	}
 }

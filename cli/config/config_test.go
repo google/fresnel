@@ -17,6 +17,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -38,10 +39,10 @@ var (
 	distroDefaults = distributions
 )
 
-// cmpConfig is a custom comparer for the Configuration struct. We use a custom
-// comparer to inspect public-facing members of the two structs. Errors
-// describing members that do not match are returned. When all checked fields
-// are equal, nil is returned.
+// cmpConfig is a custom comparer for the Configuration struct. It compares the
+// unexported members set by New and its helpers, including the selected
+// distribution. Errors describing members that do not match are returned. When
+// all checked fields are equal, nil is returned.
 // https://godoc.org/github.com/google/go-cmp/cmp#Exporter
 func cmpConfig(got, want Configuration) error {
 	if got.track != want.track {
@@ -56,19 +57,18 @@ func cmpConfig(got, want Configuration) error {
 	if got.warning != want.warning {
 		return fmt.Errorf("configuration warning mismatch, got: %t, want: %t", got.warning, want.warning)
 	}
+	if got.ffu != want.ffu {
+		return fmt.Errorf("configuration ffu mismatch, got: %t, want: %t", got.ffu, want.ffu)
+	}
+	if got.elevated != want.elevated {
+		return fmt.Errorf("configuration elevated mismatch, got: %t, want: %t", got.elevated, want.elevated)
+	}
 	if !equal(got.devices, want.devices) {
 		return fmt.Errorf("configuration devices mismatch, got: %v, want: %v", got.devices, want.devices)
 	}
-	// If no distro was provided anywhere, we can return now.
-	if got.distro == nil && want.distro == nil {
-		return nil
-	}
-	// If either distro is nil at this point, we have a mismatch.
-	if got.distro == nil || want.distro == nil {
+	if !reflect.DeepEqual(got.distro, want.distro) {
 		return fmt.Errorf("configuration distro mismatch, got: %+v\n want: %+v", got.distro, want.distro)
 	}
-	// distro's are generally static in config, so if we get here, we can safely
-	// assume a match, and return.
 	return nil
 }
 
@@ -86,6 +86,50 @@ func equal(left, right []string) bool {
 }
 
 func TestNew(t *testing.T) {
+	// Swap the production distributions for hermetic fixtures.
+	configured := distribution{
+		os:          windows,
+		name:        "Configured Distro",
+		imageServer: imageServer,
+		confServer:  "https://config.host.com/folder",
+		images: map[string]string{
+			"default":  "default_installer.iso",
+			"stable":   "stable_installer.iso",
+			"unstable": "unstable_installer.iso",
+		},
+		configs: map[string]string{
+			"default": "default_config.yaml",
+			"stable":  "stable_config.yaml",
+		},
+	}
+	unconfigured := distribution{
+		os:          linux,
+		name:        "Unconfigured Distro",
+		imageServer: imageServer,
+		images: map[string]string{
+			"default": "default_installer.iso",
+			"stable":  "stable_installer.iso",
+		},
+	}
+	seeded := configured
+	seeded.seedServer = "https://seed.host.com"
+	ffuCapable := configured
+	ffuCapable.name = "FFU Distro"
+	ffuCapable.ffu = true
+	ffuNoConfigs := unconfigured
+	ffuNoConfigs.name = "FFU Distro Without Configs"
+	ffuNoConfigs.ffu = true
+
+	oldDistributions, oldIsElevatedCmd := distributions, IsElevatedCmd
+	t.Cleanup(func() { distributions, IsElevatedCmd = oldDistributions, oldIsElevatedCmd })
+	distributions = map[string]distribution{
+		"configured":     configured,
+		"unconfigured":   unconfigured,
+		"ffu":            ffuCapable,
+		"ffu_no_configs": ffuNoConfigs,
+	}
+	elevated := func() (bool, error) { return true, nil }
+
 	tests := []struct {
 		desc           string
 		fakeIsElevated func() (bool, error)
@@ -112,7 +156,7 @@ func TestNew(t *testing.T) {
 		{
 			desc:    "bad track",
 			devices: []string{"disk1"},
-			os:      "windows",
+			os:      "configured",
 			track:   "foo",
 			want:    errTrack,
 		},
@@ -120,16 +164,16 @@ func TestNew(t *testing.T) {
 			desc:           "bad ffu track",
 			devices:        []string{"disk1"},
 			ffu:            true,
-			os:             "windowsffu",
+			os:             "ffu",
 			confTrack:      "foo",
 			track:          "foo",
-			fakeIsElevated: func() (bool, error) { return true, nil },
+			fakeIsElevated: elevated,
 			want:           errTrack,
 		},
 		{
 			desc:       "bad seed server",
 			devices:    []string{"disk1"},
-			os:         "windows",
+			os:         "configured",
 			track:      "stable",
 			seedServer: "test.foo@bar.com",
 			want:       errSeed,
@@ -137,58 +181,167 @@ func TestNew(t *testing.T) {
 		{
 			desc:           "isElevated error",
 			devices:        []string{"disk1"},
-			os:             "windows",
+			os:             "configured",
 			track:          "stable",
 			fakeIsElevated: func() (bool, error) { return false, errors.New("error") },
 			want:           errElevation,
 		},
 		{
-			desc:           "valid config",
+			desc:           "configured distro with empty confTrack defaults to track",
 			devices:        []string{"disk1"},
-			os:             "windows",
+			os:             "configured",
 			track:          "stable",
-			fakeIsElevated: func() (bool, error) { return true, nil },
+			fakeIsElevated: elevated,
 			out: &Configuration{
-				distro:   &goodDistro,
+				distro:    &configured,
+				track:     "stable",
+				confTrack: "stable",
+				devices:   []string{"disk1"},
+				elevated:  true,
+			},
+		},
+		{
+			desc:           "configured distro with empty track and confTrack uses default",
+			devices:        []string{"disk1"},
+			os:             "configured",
+			fakeIsElevated: elevated,
+			out: &Configuration{
+				distro:    &configured,
+				track:     "default",
+				confTrack: "default",
+				devices:   []string{"disk1"},
+				elevated:  true,
+			},
+		},
+		{
+			desc:           "configured distro with explicit confTrack",
+			devices:        []string{"disk1"},
+			os:             "configured",
+			track:          "unstable",
+			confTrack:      "stable",
+			fakeIsElevated: elevated,
+			out: &Configuration{
+				distro:    &configured,
+				track:     "unstable",
+				confTrack: "stable",
+				devices:   []string{"disk1"},
+				elevated:  true,
+			},
+		},
+		{
+			desc:           "configured distro with invalid confTrack",
+			devices:        []string{"disk1"},
+			os:             "configured",
+			track:          "stable",
+			confTrack:      "invalid_track",
+			fakeIsElevated: elevated,
+			want:           errTrack,
+		},
+		{
+			desc:           "configured distro with image track lacking a config",
+			devices:        []string{"disk1"},
+			os:             "configured",
+			track:          "unstable",
+			fakeIsElevated: elevated,
+			want:           errTrack,
+		},
+		{
+			desc:           "ffu distro with ffu",
+			devices:        []string{"disk1"},
+			os:             "ffu",
+			ffu:            true,
+			track:          "stable",
+			confTrack:      "stable",
+			fakeIsElevated: elevated,
+			out: &Configuration{
+				distro:    &ffuCapable,
+				ffu:       true,
+				track:     "stable",
+				confTrack: "stable",
+				devices:   []string{"disk1"},
+				elevated:  true,
+			},
+		},
+		{
+			desc:           "configured non-FFU distro rejects ffu",
+			devices:        []string{"disk1"},
+			os:             "configured",
+			ffu:            true,
+			track:          "stable",
+			fakeIsElevated: elevated,
+			want:           errInput,
+		},
+		{
+			desc:           "configured distro with seed server override",
+			devices:        []string{"disk1"},
+			os:             "configured",
+			track:          "stable",
+			seedServer:     "seed.host.com",
+			fakeIsElevated: elevated,
+			out: &Configuration{
+				distro:    &seeded,
+				track:     "stable",
+				confTrack: "stable",
+				devices:   []string{"disk1"},
+				elevated:  true,
+			},
+		},
+		{
+			desc:           "unconfigured non-FFU distro ignores confTrack",
+			devices:        []string{"disk1"},
+			os:             "unconfigured",
+			track:          "stable",
+			confTrack:      "invalid_track",
+			fakeIsElevated: elevated,
+			out: &Configuration{
+				distro:   &unconfigured,
 				track:    "stable",
 				devices:  []string{"disk1"},
 				elevated: true,
 			},
-			want: nil,
 		},
 		{
-			desc:           "valid config with ffu",
+			desc:           "unconfigured non-FFU distro rejects ffu",
 			devices:        []string{"disk1"},
-			os:             "windowsffu",
+			os:             "unconfigured",
 			ffu:            true,
-			confTrack:      "unstable",
-			track:          "unstable",
-			fakeIsElevated: func() (bool, error) { return true, nil },
-			out: &Configuration{
-				distro:    &goodDistro,
-				track:     "unstable",
-				confTrack: "unstable",
-				devices:   []string{"disk1"},
-				elevated:  true,
-			},
-			want: nil,
+			track:          "stable",
+			fakeIsElevated: elevated,
+			want:           errInput,
+		},
+		{
+			desc:           "ffu distro without configs has no default config",
+			devices:        []string{"disk1"},
+			os:             "ffu_no_configs",
+			ffu:            true,
+			track:          "stable",
+			fakeIsElevated: elevated,
+			want:           errInput,
+		},
+		{
+			desc:           "ffu distro without ffu still validates confTrack",
+			devices:        []string{"disk1"},
+			os:             "ffu",
+			track:          "stable",
+			confTrack:      "invalid_track",
+			fakeIsElevated: elevated,
+			want:           errTrack,
 		},
 	}
 	for _, tt := range tests {
-		IsElevatedCmd = tt.fakeIsElevated
-		c, got := New(false, false, false, tt.ffu, false, tt.devices, tt.os, tt.track, tt.confTrack, tt.seedServer)
-		if got == tt.want {
-			continue
-		}
-		if c == tt.out {
-			continue
-		}
-		if !errors.Is(got, tt.want) {
-			t.Errorf("%s: New() got: '%v', want: '%v'", tt.desc, got, tt.want)
-		}
-		if err := cmpConfig(*c, *tt.out); err != nil {
-			t.Errorf("%s: %v", tt.desc, err)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			IsElevatedCmd = tt.fakeIsElevated
+			c, err := New(false, false, false, tt.ffu, false, tt.devices, tt.os, tt.track, tt.confTrack, tt.seedServer)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("New() returned %v, want %v", err, tt.want)
+			}
+			if tt.out == nil {
+				return
+			}
+			if err := cmpConfig(*c, *tt.out); err != nil {
+				t.Error(err)
+			}
+		})
 	}
 }
 
@@ -314,6 +467,8 @@ func TestAddDeviceList(t *testing.T) {
 }
 
 func TestAddSeedServer(t *testing.T) {
+	overridden := goodDistro
+	overridden.seedServer = "https://foo.bar.com"
 	tests := []struct {
 		desc   string
 		server string
@@ -338,7 +493,7 @@ func TestAddSeedServer(t *testing.T) {
 			desc:   "good fqdn",
 			server: "foo.bar.com",
 			distro: goodDistro,
-			out:    Configuration{distro: &goodDistro},
+			out:    Configuration{distro: &overridden},
 			want:   nil,
 		},
 	}
@@ -601,5 +756,149 @@ func TestString(t *testing.T) {
 	c := Configuration{distro: &distro}
 	if got := c.String(); !strings.Contains(got, want) {
 		t.Errorf("String() got: %q, want contains: %q", got, want)
+	}
+}
+
+func TestHasConfig(t *testing.T) {
+	tests := []struct {
+		desc   string
+		distro *distribution
+		want   bool
+	}{
+		{
+			desc:   "nil distro",
+			distro: nil,
+			want:   false,
+		},
+		{
+			desc: "empty confServer",
+			distro: &distribution{
+				confServer: "",
+				configs:    map[string]string{"default": "conf.yaml"},
+			},
+			want: false,
+		},
+		{
+			desc: "empty configs",
+			distro: &distribution{
+				confServer: "https://foo.bar.com/configs",
+				configs:    map[string]string{},
+			},
+			want: false,
+		},
+		{
+			desc: "confServer and configs set",
+			distro: &distribution{
+				confServer: "https://foo.bar.com/configs",
+				configs:    map[string]string{"default": "conf.yaml"},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		c := Configuration{distro: tt.distro}
+		if got := c.HasConfig(); got != tt.want {
+			t.Errorf("%s: HasConfig() got: %t, want: %t", tt.desc, got, tt.want)
+		}
+	}
+}
+
+func TestNeedsConfig(t *testing.T) {
+	withConfig := &distribution{
+		confServer: "https://config.host.com/folder",
+		configs:    map[string]string{"default": "conf.yaml"},
+	}
+	tests := []struct {
+		desc   string
+		distro *distribution
+		ffu    bool
+		want   bool
+	}{
+		{desc: "no config and no ffu", distro: &distribution{}, want: false},
+		{desc: "nil distro with ffu", distro: nil, ffu: true, want: true},
+		{desc: "config without ffu", distro: withConfig, want: true},
+		{desc: "config with ffu", distro: withConfig, ffu: true, want: true},
+	}
+	for _, tt := range tests {
+		c := Configuration{distro: tt.distro, ffu: tt.ffu}
+		if got := c.NeedsConfig(); got != tt.want {
+			t.Errorf("%s: NeedsConfig() got: %t, want: %t", tt.desc, got, tt.want)
+		}
+	}
+}
+
+func TestFFUConfFileGuards(t *testing.T) {
+	tests := []struct {
+		desc      string
+		confTrack string
+		distro    *distribution
+		want      string
+	}{
+		{
+			desc:      "nil distro",
+			confTrack: "default",
+			distro:    nil,
+			want:      "",
+		},
+		{
+			desc:      "empty configs",
+			confTrack: "default",
+			distro:    &distribution{},
+			want:      "",
+		},
+		{
+			desc:      "unmatched track",
+			confTrack: "nonexistent",
+			distro: &distribution{
+				configs: map[string]string{"default": "conf.yaml"},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		c := Configuration{confTrack: tt.confTrack, distro: tt.distro}
+		if got := c.FFUConfFile(); got != tt.want {
+			t.Errorf("%s: FFUConfFile() got: %q, want: %q", tt.desc, got, tt.want)
+		}
+	}
+}
+
+func TestFFUConfPathGuards(t *testing.T) {
+	tests := []struct {
+		desc      string
+		confTrack string
+		distro    *distribution
+		want      string
+	}{
+		{
+			desc:      "nil distro",
+			confTrack: "default",
+			distro:    nil,
+			want:      "",
+		},
+		{
+			desc:      "empty confServer",
+			confTrack: "default",
+			distro: &distribution{
+				confServer: "",
+				configs:    map[string]string{"default": "conf.yaml"},
+			},
+			want: "",
+		},
+		{
+			desc:      "unmatched track",
+			confTrack: "nonexistent",
+			distro: &distribution{
+				confServer: "https://foo.bar.com",
+				configs:    map[string]string{"default": "conf.yaml"},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		c := Configuration{confTrack: tt.confTrack, distro: tt.distro}
+		if got := c.FFUConfPath(); got != tt.want {
+			t.Errorf("%s: FFUConfPath() got: %q, want: %q", tt.desc, got, tt.want)
+		}
 	}
 }

@@ -17,6 +17,7 @@ package write
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -135,10 +136,45 @@ func TestExecute(t *testing.T) {
 			want:    subcommands.ExitFailure,
 		},
 		{
-			desc:    "--conf_track passed on non ffu distro",
-			cmd:     &writeCmd{},
-			args:    []string{"--track=stable", "--conf_track=stable", "1"},
-			execute: func(c *writeCmd, f *flag.FlagSet) error { return nil },
+			desc: "--conf_track passed on non ffu distro",
+			cmd:  &writeCmd{},
+			args: []string{"--track=stable", "--conf_track=stable", "1"},
+			execute: func(c *writeCmd, f *flag.FlagSet) error {
+				if c.confTrack != "stable" {
+					return fmt.Errorf("c.confTrack got %q, want 'stable'", c.confTrack)
+				}
+				return nil
+			},
+			logDir:  filepath.Dir(filepath.Join(os.TempDir(), binaryName)),
+			verbose: false,
+			want:    subcommands.ExitSuccess,
+		},
+		{
+			// An empty conf_track is passed through unchanged; config.New
+			// defaults it to the image track.
+			desc: "--conf_track is passed through empty when unspecified",
+			cmd:  &writeCmd{},
+			args: []string{"--track=testing", "1"},
+			execute: func(c *writeCmd, f *flag.FlagSet) error {
+				if c.confTrack != "" {
+					return fmt.Errorf("c.confTrack got %q, want empty", c.confTrack)
+				}
+				return nil
+			},
+			logDir:  filepath.Dir(filepath.Join(os.TempDir(), binaryName)),
+			verbose: false,
+			want:    subcommands.ExitSuccess,
+		},
+		{
+			desc: "--conf_track explicitly specified on non ffu distro",
+			cmd:  &writeCmd{},
+			args: []string{"--track=stable", "--conf_track=unstable", "1"},
+			execute: func(c *writeCmd, f *flag.FlagSet) error {
+				if c.confTrack != "unstable" {
+					return fmt.Errorf("c.confTrack got %q, want 'unstable'", c.confTrack)
+				}
+				return nil
+			},
 			logDir:  filepath.Dir(filepath.Join(os.TempDir(), binaryName)),
 			verbose: false,
 			want:    subcommands.ExitSuccess,

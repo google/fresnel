@@ -46,7 +46,13 @@ import (
 const (
 	oneGB        = uint64(1073741824)
 	seedDestFile = `seed.json`
+	// confDestFile is the config name for FFU distributions. WinPE treats its
+	// presence on the OCI volume as a request for FFU/OSD restoration.
 	confDestFile = `startimage.yaml`
+	// bootConfDestFile is the config name for non-FFU distributions. Unified
+	// WinPE media reads it to select the OS at boot; older per-OS media ignore
+	// it and use the OS baked into the image.
+	bootConfDestFile = `bootconfig.yaml`
 )
 
 var (
@@ -117,6 +123,7 @@ type Configuration interface {
 	ImageFile() string
 	Elevated() bool
 	FFU() bool
+	NeedsConfig() bool
 	PowerOff() bool
 	SeedDest() string
 	SeedFile() string
@@ -279,8 +286,8 @@ func (i *Installer) retrieveFile(fileName, filePath string) (err error) {
 	return downloadFile(client, filePath, f)
 }
 
-// Retrieve passes the necessary parameters to retrieveFile
-// depending on whether or not the distribution will be FFU based.
+// Retrieve downloads the image file and, when the configuration needs a
+// runtime boot config, the config file for the selected config track.
 func (i *Installer) Retrieve() (err error) {
 	// Confirm that the Installer has what we need.
 	if i.config.ImagePath() == "" {
@@ -290,9 +297,9 @@ func (i *Installer) Retrieve() (err error) {
 		return errCache
 	}
 
-	// If FFU is false, retrieve only the image file.
-	// Otherwise retrieve the image file and FFU manifest.
-	if !i.config.FFU() {
+	// If no runtime config is needed, retrieve only the image file.
+	// Otherwise retrieve the image file and configuration manifest.
+	if !i.config.NeedsConfig() {
 		return i.retrieveFile(i.config.ImageFile(), i.config.ImagePath())
 	}
 
@@ -527,8 +534,8 @@ func (i *Installer) Provision(d Device) error {
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("os.Stat(%q) returned %v: %w", path, err, errPath)
 	}
-	// Check that the FFU config is already in the cache.
-	if i.config.FFU() {
+	// Check that the config is already in the cache.
+	if i.config.NeedsConfig() {
 		deck.InfofA("Checking %q for existence of %q.", i.cache, i.config.FFUConfFile()).With(deck.V(2)).Go()
 		path := filepath.Join(i.cache, i.config.FFUConfFile())
 		if _, err := os.Stat(path); err != nil {
@@ -597,10 +604,10 @@ func (i *Installer) provisionISO(d Device) (err error) {
 		return fmt.Errorf("writeISO() returned %v: %w", err, errProvision)
 	}
 
-	// If FFU, write config to disk.
-	if i.config.FFU() {
+	// If configured or FFU, write config to disk.
+	if i.config.NeedsConfig() {
 		if err := i.writeConfig(p); err != nil {
-			return fmt.Errorf("writeConfig() returned %v", err)
+			return fmt.Errorf("writeConfig() returned %w", err)
 		}
 	}
 
@@ -727,7 +734,8 @@ func (i *Installer) writeSeed(h isoHandler, p partition) error {
 	return nil
 }
 
-// writeConfig writes the FFU config file to disk using SeedDest directory.
+// writeConfig writes the distribution config file to the SeedDest directory.
+// FFU distributions get startimage.yaml and all others get bootconfig.yaml.
 func (i *Installer) writeConfig(p partition) error {
 	source := filepath.Join(i.cache, i.config.FFUConfFile())
 	var content []byte
@@ -749,7 +757,18 @@ func (i *Installer) writeConfig(p partition) error {
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll(%q, 0755) returned %v: %w", dest, err, errPerm)
 	}
-	destFile := filepath.Join(dest, confDestFile)
+	destName, staleName := bootConfDestFile, confDestFile
+	if i.config.FFU() {
+		destName, staleName = confDestFile, bootConfDestFile
+	}
+	// Remove the counterpart first so a leftover startimage.yaml cannot send a
+	// non-FFU boot into FFU restoration, and vice versa. Removing before writing
+	// guarantees both files never coexist if either step fails.
+	staleFile := filepath.Join(dest, staleName)
+	if err := os.Remove(staleFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("os.Remove(%q) returned %v: %w", staleFile, err, errIO)
+	}
+	destFile := filepath.Join(dest, destName)
 	deck.InfofA("Writing config: %q.", destFile).With(deck.V(2)).Go()
 	// Permissions = owner:read/write, group:read"
 	if err := ioutil.WriteFile(destFile, content, 0644); err != nil {

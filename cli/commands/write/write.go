@@ -77,7 +77,6 @@ func init() {
 	subcommands.Register(&writeCmd{name: "write"}, "")
 	subcommands.Register(&writeCmd{name: "update", distro: "windows", track: "stable", update: true}, "")
 	subcommands.Register(&writeCmd{name: "windows", distro: "windows", track: "stable"}, "")
-	subcommands.Register(&writeCmd{name: "windowsdev", distro: "windowsdev", track: "stable"}, "")
 	subcommands.Register(&writeCmd{name: "windowsffu", distro: "windowsffu", track: "stable", ffu: true}, "")
 }
 
@@ -245,7 +244,7 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&c.update, "update", c.update, "attempts to perform a device refresh only for non-admin users")
 	f.StringVar(&c.distro, "distro", c.distro, "the os distribution to be provisioned, typically 'windows' or 'linux'")
 	f.StringVar(&c.track, "track", c.track, "track (variant) of the installer to provision")
-	f.StringVar(&c.confTrack, "conf_track", c.track, "track (variant) of the configuration file to provision, only valid with FFU based distros")
+	f.StringVar(&c.confTrack, "conf_track", "", "track (variant) of the configuration file to provision")
 	f.StringVar(&c.seedServer, "seed_server", "", "override the default server to use for obtaining seeds, only used for debugging")
 	f.BoolVar(&c.info, "info", false, "display console messages with debugging information included")
 	f.IntVar(&c.v, "v", 1, "controls the level of info log verbosity")
@@ -312,12 +311,6 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 		console.Print("Only one of '--all' or '--show_fixed' is allowed.")
 		deck.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
 		return subcommands.ExitFailure
-	}
-
-	// FFU images are the only ones that use confTrack. Default confTrack = track for reusability.
-	if !c.ffu && c.confTrack != "" {
-		deck.InfofA("Ignoring confTrack flag %q, as this is only used for windowsffu", c.confTrack).With(deck.V(1)).Go()
-		c.confTrack = ""
 	}
 
 	// We now know we have a valid list of devices to provision, and we can
