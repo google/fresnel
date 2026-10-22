@@ -25,9 +25,7 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/docker/go-units"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/dustin/go-humanize"
@@ -141,101 +139,4 @@ func Printjson(targets []TargetDevice, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "%s", output)
 	return nil
-}
-
-type progressReader struct {
-	reader    io.Reader
-	operation string
-
-	// Total length of data and counter for what has been read.
-	length int64
-	read   int64
-
-	// Counter for progress bar and how frequently to update the bar in msec.
-	bars int64
-	freq int64
-
-	start   time.Time
-	lastLog time.Time
-}
-
-// ProgressReader wraps an io.Reader and writes the read progress to the
-// console. The writes are displayed on call of the Read method and at most
-// every 5 seconds. The messages include the supplied human readable operation.
-// The provided length can also be zero if it is unknown ahead of time. A
-// ProgressReader always outputs to the console, regardless of the value of
-// verbose.
-func ProgressReader(reader io.Reader, operation string, length int64) io.Reader {
-	now := time.Now()
-	if length < 0 {
-		length = 0
-	}
-	pr := progressReader{
-		reader:    reader,
-		operation: operation,
-		length:    length,
-		read:      0,
-		bars:      0,
-		freq:      300, // The bar is updated every 300 msec.
-		start:     now,
-		lastLog:   now,
-	}
-	return &pr
-}
-
-func (pr *progressReader) Read(p []byte) (int, error) {
-	n, err := pr.reader.Read(p)
-	if err != nil {
-		return n, err
-	}
-
-	pr.read += int64(n)
-	now := time.Now()
-	diff := now.Sub(pr.lastLog)
-	if diff.Milliseconds() < pr.freq {
-		return n, nil
-	}
-
-	// Prepare to log progress.
-	pr.lastLog = now
-	length := float64(pr.length) // in bytes.
-	read := float64(pr.read)     // in bytes.
-
-	// Determine read speed.
-	diff = now.Sub(pr.start)
-	since := diff.Seconds()
-	var speed float64 // in bytes/s.
-	if since != 0 {
-		speed = read / since
-	}
-
-	// Log progress.
-	speeds := units.BytesSize(speed) + "/s"
-	if pr.length >= 0 {
-		// Determine remaining bytes and time until finished.
-		remain := length - read // Remaining bytes to read.
-		if remain < 0 {
-			remain = 0 // This shouldn't ever happen.
-		}
-		var until float64 // Seconds until finished.
-		if speed != 0 {
-			until = remain / speed
-		}
-		lengths := units.BytesSize(length)
-		// Print the speed and estimated time remaining just once, above
-		// the progress bar.
-		if diff.Milliseconds() <= pr.freq+(pr.freq/3) {
-			fmt.Printf("%s started: %s, %0.2f seconds remaining\n", pr.operation, speeds, until)
-			fmt.Printf("Size:     [--------------------------------------------------] %s\n", lengths)
-			fmt.Print("Progress:  ")
-		}
-		// Calculate the progress and update the progress bar.
-		progress := int64(read / length * 100 / 2)
-		for pr.bars <= progress {
-			fmt.Print("=")
-			pr.bars++
-		}
-	}
-
-	return n, nil
 }

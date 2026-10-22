@@ -351,8 +351,9 @@ func download(client httpDoer, path string, w io.Writer) error {
 
 	// Provide updates during the download.
 	fileName := regExFileName.FindString(path)
-	op := "\nDownload of " + fileName
-	r := console.ProgressReader(resp.Body, op, resp.ContentLength)
+	r := console.ProgressReader(resp.Body, "Downloading "+fileName, resp.ContentLength)
+	// Closing ends the progress line even if the copy fails while writing.
+	defer r.Close()
 	if _, err := io.Copy(w, r); err != nil {
 		return fmt.Errorf("failed to write body of %q, %v: %w", path, err, errIO)
 	}
