@@ -108,7 +108,10 @@ func PrintDevices(targets []TargetDevice, w io.Writer, json bool) {
 	table := tablewriter.NewTable(w,
 		tablewriter.WithRendition(tw.Rendition{Borders: tw.BorderNone}),
 		tablewriter.WithRowAutoWrap(tw.WrapNone))
-	table.Header("\033[32mDevice\033[0m", "Model", "Size")
+	// Header cells are plain text: tablewriter upper-cases and splits header
+	// text, which breaks embedded terminal escape sequences and misaligns the
+	// columns.
+	table.Header("Device", "Model", "Size")
 	for _, device := range targets {
 		table.Append(
 			device.Identifier(),

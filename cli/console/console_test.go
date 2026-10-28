@@ -16,6 +16,7 @@ package console
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -106,6 +107,41 @@ func TestPrintDevices(t *testing.T) {
 		PrintDevices(tt.devices, &got, tt.json)
 		if !strings.Contains(got.String(), tt.want) {
 			t.Errorf("%s: PrintDevices() got = %q, must contain = %q", tt.desc, got.String(), tt.want)
+		}
+	}
+}
+
+// separatorColumns returns the rune indices of the column separators in a
+// rendered table line. They equal display columns because the test data only
+// contains single-width runes.
+func separatorColumns(line string) []int {
+	var cols []int
+	for i, r := range []rune(line) {
+		if r == '│' || r == '┼' {
+			cols = append(cols, i)
+		}
+	}
+	return cols
+}
+
+func TestPrintDevicesAlignment(t *testing.T) {
+	devices := []TargetDevice{
+		&fakeDevice{id: "2", friendlyName: "Samsung Flash Drive", size: 128000000000},
+		&fakeDevice{id: "1", friendlyName: "Samsung Flash Drive", size: 128000000000},
+	}
+	var got bytes.Buffer
+	PrintDevices(devices, &got, false)
+	if strings.Contains(got.String(), "\x1b") {
+		t.Errorf("PrintDevices() output contains terminal escape sequences: %q", got.String())
+	}
+	var want []int
+	for _, line := range strings.Split(strings.TrimRight(got.String(), "\n"), "\n") {
+		cols := separatorColumns(line)
+		if want == nil {
+			want = cols
+		}
+		if len(cols) != 2 || !slices.Equal(cols, want) {
+			t.Errorf("PrintDevices() line %q has separators at columns %v, want 2 separators at %v", line, cols, want)
 		}
 	}
 }

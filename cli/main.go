@@ -55,13 +55,10 @@ func setupLogging() error {
 }
 
 func main() {
-
-	// Explicitly set the log output flag from the log package so that we can see
-	// info messages by default in the console and in the logs. Logging is
-	// initialized in each sub-command.
-	flag.Set("alsologtostderr", "true")
-	flag.Set("vmodule", "third_party/golang/fresnel*=1")
-
+	// Console and log file output come from deck. The log package flags keep
+	// their defaults, so messages that dependencies log through it, such as
+	// authentication requests, stay in its log files instead of cluttering the
+	// console. Errors still reach stderr.
 	if err := setupLogging(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
