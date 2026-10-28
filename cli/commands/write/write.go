@@ -164,6 +164,10 @@ type writeCmd struct {
 	// maxSize is the largest size device to search for in GB. For convenience,
 	// this value is set to 'no limit (0)' by default by flag.
 	maxSize int
+
+	// image writes the installer to a raw disk image file instead of devices.
+	// The path is optional and defaults to the invoking user's home folder.
+	image imageFileFlag
 }
 
 // Ensure writeCommand implements the subcommands.Command interface.
@@ -185,9 +189,11 @@ func (c *writeCmd) Synopsis() string {
 
 // Usage returns a long string explaining the subcommand and giving usage information.
 func (c *writeCmd) Usage() string {
-	return fmt.Sprintf(`%s [flags...] [device(s)...]
+	return fmt.Sprintf(`%[1]s [flags...] [device(s)...]
+%[1]s [flags...] --image_file[=PATH]
 
-Download and provision an image (installer) to one or more storage devices.
+Download and provision an image (installer) to one or more storage devices,
+or on Linux to a raw disk image file.
 This operation requires elevated permissions such as 'sudo' on Linux/Mac or
 'run as administrator' on Windows.
 
@@ -211,26 +217,35 @@ Flags:
   --minimum [int] - The minimum size in GB to consider when searching.
   --maximum [int] - The maximum size in GB to consider when searching.
 
+  --image_file[=PATH] - (Linux) Write a raw disk image file instead of devices.
+                        PATH may be a file or an existing folder; it defaults
+                        to the home folder of the user running the command.
+                        Write the resulting .bin file to a USB drive with the
+                        Device Recovery Utility in Chrome ('Use local image').
+
 Use the 'list' command to list available devices or use the '--all' flag to
 write to all suitable devices.
 
 Example #1 (Linux): 'provision a windows installer on storage devices sdy and sdz'
-  - '%s windows sdy sdz'
+  - '%[2]s windows sdy sdz'
 
 Example #2 (Windows): 'provision a windows installer on storage device 1'
-  - '%s windows 1'
+  - '%[2]s windows 1'
 
 Example #3 (Windows) 'provision a windows installer on all storage devices'
-  - '%s windows -all'
+  - '%[2]s windows -all'
 
 Example #4 (Mac) 'provision a windows test image on storage device disk1'
-  - '%s write -distro=windows -track=test disk1'
+  - '%[2]s write -distro=windows -track=test disk1'
 
 Example #5 (Windows) 'update a windows installer on storage device disk1'
-  - '%s update 1'
+  - '%[2]s update 1'
+
+Example #6 (Linux) 'write a windows installer image file to the home folder'
+  - '%[2]s windows --image_file'
 
 Defaults:
-`, c.name, binaryName, binaryName, binaryName, binaryName, binaryName)
+`, c.name, binaryName)
 }
 
 // SetFlags adds the flags for this command to the specified set.
@@ -264,6 +279,7 @@ func (c *writeCmd) SetFlags(f *flag.FlagSet) {
 		d = true
 	}
 	f.BoolVar(&c.dismount, "dismount", d, "dismount devices after provisioning is complete")
+	f.Var(&c.image, "image_file", "(Linux) write a raw disk image file instead of devices; use --image_file=PATH to choose the file or folder, defaults to the home folder")
 }
 
 // imageInstaller represents installer.Installer.
@@ -276,7 +292,7 @@ type imageInstaller interface {
 }
 
 // Execute executes the command and returns an ExitStatus.
-func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) (exitStatus subcommands.ExitStatus) {
+func (c *writeCmd) Execute(ctx context.Context, f *flag.FlagSet, _ ...interface{}) (exitStatus subcommands.ExitStatus) {
 	// Enable turning verbosity up past log.V(1) for the cli with a single bool
 	// flag to retain flag equivalence with similar tooling on Windows. To avoid
 	// excessive verbosity, V is only increased for local libraries.
@@ -297,32 +313,46 @@ func (c *writeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 	// Log startup for upstream consumption by dashboards.
 	deck.InfofA("%s is initializing.\n", binaryName).With(deck.V(1)).Go()
 
-	// Check if any devices were specified.
-	if f.NArg() == 0 && !c.allDrives {
-		console.Printf("No devices were specified.\n"+
-			"Use the 'list' command to list available devices or use the '--all' flag to write to all suitable devices.\n"+
-			"usage: %s %s\n", os.Args[0], c.Usage())
-		return subcommands.ExitUsageError
+	// Image mode writes to a file, so it has its own validation and skips the
+	// device checks below.
+	runFunc := execute
+	if c.image.enabled {
+		if err := validateImageMode(c, f); err != nil {
+			console.Printf("%v\nusage: %s %s\n", err, os.Args[0], c.Usage())
+			deck.Errorln(err)
+			return subcommands.ExitUsageError
+		}
+		runFunc = func(c *writeCmd, f *flag.FlagSet) error { return executeImage(ctx, c, f) }
+	} else {
+		// Check if any devices were specified.
+		if f.NArg() == 0 && !c.allDrives {
+			console.Printf("No devices were specified.\n"+
+				"Use the 'list' command to list available devices or use the '--all' flag to write to all suitable devices.\n"+
+				"usage: %s %s\n", os.Args[0], c.Usage())
+			return subcommands.ExitUsageError
+		}
+
+		// Setting both all and listFixed is not allowed to protect users from
+		// unintentional wiping of their fixed (os) disks.
+		if c.allDrives && c.listFixed {
+			console.Print("Only one of '--all' or '--show_fixed' is allowed.")
+			deck.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
+			return subcommands.ExitFailure
+		}
 	}
 
-	// Setting both all and listFixed is not allowed to protect users from
-	// unintentional wiping of their fixed (os) disks.
-	if c.allDrives && c.listFixed {
-		console.Print("Only one of '--all' or '--show_fixed' is allowed.")
-		deck.Errorln("Only one of '--all' or '--show_fixed' is allowed.")
-		return subcommands.ExitFailure
-	}
-
-	// We now know we have a valid list of devices to provision, and we can
-	// begin provisioning.
-	if err := execute(c, f); err != nil {
+	// The arguments are valid, so provisioning can begin.
+	if err := runFunc(c, f); err != nil {
 		console.Printf("%s completed with errors: %v", binaryName, err)
 		deck.Errorf("%s completed with errors: %v", binaryName, err)
 		return subcommands.ExitFailure
 	}
 
-	// Log completion for upstream consumption by dashboards.
-	console.Printf("%s completed successfully.", binaryName)
+	// Log completion for upstream consumption by dashboards. Image mode prints
+	// the image file path as its last line instead, so that it is easy to find.
+	if !c.image.enabled {
+		console.Printf("%s completed successfully.", binaryName)
+	}
 	deck.InfofA("%s completed successfully.", binaryName).With(deck.V(1)).Go()
 	return subcommands.ExitSuccess
 }
@@ -423,9 +453,11 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		}
 	}(targets)
 
-	// Retrieve the image. This step occurs only once for n>0 devices.
-	console.Printf("\nRetrieving image...\n    %s ->\n    %s", conf.ImagePath(), i.Cache())
-	deck.InfofA("Retrieving image...\n    %s ->\n    %s\n\n", conf.ImagePath(), i.Cache()).With(deck.V(1)).Go()
+	// Retrieve the image. This step occurs only once for n>0 devices. The
+	// source URL and cache folder are only logged, because the download
+	// progress already names each file.
+	console.Printf("\nRetrieving image...")
+	deck.Infof("Retrieving image...\n    %s ->\n    %s\n\n", conf.ImagePath(), i.Cache())
 	if err := i.Retrieve(); err != nil {
 		return fmt.Errorf("%w: Retrieve() returned %v", errRetrieve, err)
 	}
@@ -469,19 +501,22 @@ func run(c *writeCmd, f *flag.FlagSet) (err error) {
 		return nil
 	}
 
-	// Prepare and provision devices. This step occurs once per device.
+	// Prepare and provision devices. This step occurs once per device. Devices
+	// are named by identifier and model, because several devices can share a
+	// model name.
 	for _, device := range targets {
-		console.Printf("\nPreparing device %q...", device.FriendlyName())
-		deck.InfofA("Preparing device %q...", device.FriendlyName()).With(deck.V(1)).Go()
+		name := fmt.Sprintf("%s (%s)", device.Identifier(), device.FriendlyName())
+		console.Printf("\nPreparing device %s...", name)
+		deck.InfofA("Preparing device %s...", name).With(deck.V(1)).Go()
 		// Prepare the device.
 		if err := i.Prepare(device); err != nil {
-			return fmt.Errorf("%w: Prepare(%q) returned %v: ", errPrepare, device.FriendlyName(), err)
+			return fmt.Errorf("%w: Prepare(%q) returned %v", errPrepare, name, err)
 		}
-		console.Printf("Provisioning device %q...", device.FriendlyName())
-		deck.InfofA("Provisioning device %q...", device.FriendlyName()).With(deck.V(1)).Go()
+		console.Printf("Provisioning device %s...", name)
+		deck.InfofA("Provisioning device %s...", name).With(deck.V(1)).Go()
 		// Provision the device.
 		if err := i.Provision(device); err != nil {
-			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, device.FriendlyName(), err)
+			return fmt.Errorf("%w: Provision(%q) returned %v", errProvision, name, err)
 		}
 	}
 	return nil

@@ -154,6 +154,46 @@ cli.exe write --distro=windows -track=stable 1
 cli write --distro=linux -track=unstable sda
 ```
 
+#### Writing to an Image File (Linux Only)
+
+**--image_file[=PATH]**
+
+Default = [Disabled]
+
+Writes the installer to a raw disk image file instead of a storage device. The
+image can then be written to a USB drive with the "Use local image" option of
+the Device Recovery Utility extension for Chrome, for example on ChromeOS.
+
+*   Without a value, the image is written to the home folder of the user who
+    ran the command, even when it runs under `sudo`. The file is named
+    `<binary>-<distro>-<track>-<date>-<time>.bin`.
+*   `PATH` may be a file or an existing folder. The `.bin` extension is
+    recommended because the Device Recovery Utility lists `.bin` files but not
+    `.img` files.
+*   An existing file is never overwritten.
+
+This mode requires:
+
+*   Linux with loop device support (`/dev/loop-control`), such as a physical
+    host or a full virtual machine. Unprivileged containers, such as the
+    default Linux development environment on ChromeOS (Crostini), cannot attach
+    loop devices and are not supported.
+*   Elevated permissions (`sudo`), and the `losetup`, `lsblk`, `parted`,
+    `wipefs`, `mkfs.vfat`, `fatlabel`, `mount`, and `umount` commands.
+*   A distribution whose installer is an ISO image.
+
+The image is sized to fit the smallest common USB drive size that holds the
+installer. If a seed is configured for the distribution, it is stored in the
+image, so write the image to a drive soon and delete the file afterwards.
+
+__**Examples**__
+
+```
+sudo cli write --distro=windows --track=stable --image_file
+
+sudo cli write --distro=windows --track=stable --image_file=/tmp/installer.bin
+```
+
 ## Important Behaviors
 
 Specific behaviors are automatically triggered by configuring fields for your
